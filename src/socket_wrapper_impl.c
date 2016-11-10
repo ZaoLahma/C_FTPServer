@@ -15,12 +15,12 @@
 #include <unistd.h>
 #include <string.h>
 
-void disconnect(int socketFd)
+static void disconnect(int socketFd)
 {
 	close(socketFd);
 }
 
-int get_server_socket_fd(char* portNo)
+static int get_server_socket_fd(char* portNo)
 {
     int sockfd;
     struct addrinfo hints;
@@ -71,7 +71,7 @@ int get_server_socket_fd(char* portNo)
     return sockfd;
 }
 
-int connect_to_server(char* address, char* portNo)
+static int connect_to_server(char* address, char* portNo)
 {
     int sockfd;
 
@@ -111,7 +111,7 @@ int connect_to_server(char* address, char* portNo)
     return sockfd;
 }
 
-int wait_for_connection(int socketFd)
+static int wait_for_connection(int socketFd)
 {
 	struct sockaddr_storage their_addr;
     socklen_t sin_size;

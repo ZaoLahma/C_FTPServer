@@ -19,7 +19,7 @@ unsigned int const POOL = 0;
 unsigned int const DETACHED = 1;
 
 //Detached thread impl
-void execute_job_detached_thread_impl(void* (*thread_func)(void*), void* arg)
+static void execute_job_detached_thread_impl(void* (*thread_func)(void*), void* arg)
 {
 	pthread_t thread;
 	int threadStatus = pthread_create(&thread, 0, thread_func, arg);
@@ -34,7 +34,7 @@ struct QueueItem
 	struct QueueItem* next;
 };
 
-void queue_execution(struct QueueItem* item)
+static void queue_execution(struct QueueItem* item)
 {
 	pthread_mutex_lock(&mutex);
 	//printf("queue_execution called\n");
@@ -59,7 +59,7 @@ void queue_execution(struct QueueItem* item)
 	pthread_mutex_unlock(&mutex);
 }
 
-struct QueueItem* pop_queue()
+static struct QueueItem* pop_queue()
 {
 	//printf("pop_queue called\n");
 	pthread_mutex_lock(&mutex);
@@ -83,7 +83,7 @@ struct PoolThreadFunc
 	struct PoolThreadFunc* next;
 };
 
-void* pool_thread_func(void* arg)
+static void* pool_thread_func(void* arg)
 {
 	//printf("pool_thread_func called\n");
 	struct QueueItem* queuePtr = 0;
@@ -112,7 +112,7 @@ void* pool_thread_func(void* arg)
 	return 0;
 }
 
-void execute_job_thread_pool_impl(void* (*thread_func)(void*), void* arg)
+static void execute_job_thread_pool_impl(void* (*thread_func)(void*), void* arg)
 {
 	struct QueueItem* queueItem = (struct QueueItem*)malloc(sizeof(struct QueueItem));
 
