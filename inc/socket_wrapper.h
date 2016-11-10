@@ -17,7 +17,7 @@ struct socket_common
 
 struct socket_client
 {
-	int (*connect)();
+	int (*connect)(char* address, char* portNo);
 	struct socket_common conn;
 };
 

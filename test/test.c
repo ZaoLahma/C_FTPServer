@@ -42,6 +42,20 @@ void* thread_func_2(void* arg)
 	return 0;
 }
 
+void* connect_func(void* arg)
+{
+	printf("%p\n", arg);
+	struct socket_client client;
+	init_client_socket(&client);
+	sleep(1);
+
+	printf("Connecting\n");
+	client.connect("127.0.0.1", "3370");
+	printf("After connect\n");
+
+	return 0;
+}
+
 int main(void)
 {
 	printf("----- DETACHED TEST----- \n");
@@ -81,10 +95,15 @@ int main(void)
 	struct socket_server server;
 	init_server_socket(&server);
 
-	int socketFd = server.get_server_socket_fd("3470");
+	int socketFd = server.get_server_socket_fd("3370");
 
 	printf("socketFd: %d\n", socketFd);
 
+	threadStarter.execute_function(&connect_func, 0);
+
+	int clientFd = server.wait_for_connection(socketFd);
+
+	server.conn.disconnect(clientFd);
 	server.conn.disconnect(socketFd);
 
 	return 0;

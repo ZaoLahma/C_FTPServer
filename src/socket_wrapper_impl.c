@@ -71,13 +71,66 @@ int get_server_socket_fd(char* portNo)
     return sockfd;
 }
 
+int connect_to_server(char* address, char* portNo)
+{
+    int sockfd;
+
+    struct addrinfo hints;
+	struct addrinfo* servinfo;
+	struct addrinfo* p;
+    int rv;
+
+    memset(&hints, 0, sizeof hints);
+    hints.ai_family = AF_UNSPEC;
+    hints.ai_socktype = SOCK_STREAM;
+
+    if ((rv = getaddrinfo(address, portNo, &hints, &servinfo)) != 0) {
+        return 1;
+    }
+
+    for(p = servinfo; p != 0; p = p->ai_next) {
+        if ((sockfd = socket(p->ai_family, p->ai_socktype,
+                p->ai_protocol)) == -1) {
+            continue;
+        }
+
+        if (connect(sockfd, p->ai_addr, p->ai_addrlen) == -1) {
+            close(sockfd);
+            continue;
+        }
+
+        break;
+    }
+
+    if (p == 0) {
+        return 2;
+    }
+
+    freeaddrinfo(servinfo);
+
+    return sockfd;
+}
+
+int wait_for_connection(int socketFd)
+{
+	struct sockaddr_storage their_addr;
+    socklen_t sin_size;
+
+	sin_size = sizeof their_addr;
+	int new_fd = accept(socketFd, (struct sockaddr *)&their_addr, &sin_size);
+
+    return new_fd;
+}
+
 void init_client_socket(struct socket_client* socket)
 {
+	socket->connect = &connect_to_server;
 	socket->conn.disconnect = &disconnect;
 }
 
 void init_server_socket(struct socket_server* socket)
 {
 	socket->get_server_socket_fd = &get_server_socket_fd;
+	socket->wait_for_connection = &wait_for_connection;
 	socket->conn.disconnect = &disconnect;
 }
