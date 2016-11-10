@@ -85,7 +85,7 @@ int connect_to_server(char* address, char* portNo)
     hints.ai_socktype = SOCK_STREAM;
 
     if ((rv = getaddrinfo(address, portNo, &hints, &servinfo)) != 0) {
-        return 1;
+        return -1;
     }
 
     for(p = servinfo; p != 0; p = p->ai_next) {
@@ -103,7 +103,7 @@ int connect_to_server(char* address, char* portNo)
     }
 
     if (p == 0) {
-        return 2;
+        return -1;
     }
 
     freeaddrinfo(servinfo);
