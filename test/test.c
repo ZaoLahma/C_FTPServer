@@ -10,6 +10,7 @@
 #include <stdlib.h>
 #include "../inc/thread_starter.h"
 #include "../inc/thread_starter_impl.h"
+#include "../inc/socket_wrapper_impl.h"
 
 #define EXPECT(this, that) \
 if(this != that) \
@@ -73,5 +74,18 @@ int main(void)
 	sleep(1);
 
 	free(testInt);
+
+	struct socket_client client;
+	init_client_socket(&client);
+
+	struct socket_server server;
+	init_server_socket(&server);
+
+	int socketFd = server.get_server_socket_fd("3470");
+
+	printf("socketFd: %d\n", socketFd);
+
+	server.conn.disconnect(socketFd);
+
 	return 0;
 }
