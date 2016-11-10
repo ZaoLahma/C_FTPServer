@@ -50,7 +50,8 @@ void* connect_func(void* arg)
 	sleep(1);
 
 	printf("Connecting\n");
-	client.connect("127.0.0.1", "3370");
+	int serverFd = client.connect("127.0.0.1", "3370");
+	client.conn.disconnect(serverFd);
 	printf("After connect\n");
 
 	return 0;
