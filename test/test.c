@@ -8,6 +8,7 @@
 #include <unistd.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include "../inc/thread_starter.h"
 #include "../inc/thread_starter_impl.h"
 #include "../inc/socket_wrapper_impl.h"
@@ -51,6 +52,16 @@ void* connect_func(void* arg)
 
 	printf("Connecting\n");
 	int serverFd = client.connect("127.0.0.1", "3370");
+
+	char recv[4];
+	int noOfBytesReceived = client.conn.receive(serverFd, recv, 4);
+	EXPECT(3, noOfBytesReceived);
+	EXPECT(0, strcmp(recv, "hej"));
+
+	char to_send[6] = {'h', 'e', 'l', 'l', 'o', '\0'};
+	int noOfBytesSent = client.conn.send(serverFd, to_send, 6);
+	EXPECT(6, noOfBytesSent);
+
 	client.conn.disconnect(serverFd);
 	printf("After connect\n");
 
@@ -103,6 +114,15 @@ int main(void)
 	threadStarter.execute_function(&connect_func, 0);
 
 	int clientFd = server.wait_for_connection(socketFd);
+
+	char to_send[4] = {'h', 'e', 'j', '\0'};
+	int noOfBytesSent = server.conn.send(clientFd, to_send, 3);
+	EXPECT(3, noOfBytesSent);
+
+	char recv[6];
+	int noOfBytesReceived = server.conn.receive(clientFd, recv, 6);
+	EXPECT(6, noOfBytesReceived);
+	EXPECT(0, strcmp(recv, "hello"));
 
 	server.conn.disconnect(clientFd);
 	server.conn.disconnect(socketFd);

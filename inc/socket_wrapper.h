@@ -12,7 +12,7 @@ struct socket_common
 {
 	void (*disconnect)(int socketFd);
 	int (*send)(int fileDesc, void* data, int size);
-	int (*receive)(int fileDesc, void* data);
+	int (*receive)(int fileDesc, void* data, int max_size);
 };
 
 struct socket_client

@@ -15,11 +15,31 @@
 #include <unistd.h>
 #include <string.h>
 
+//----- Common -----
 static void disconnect(int socketFd)
 {
 	close(socketFd);
 }
 
+static int socket_send(int fileDesc, void* data, int size)
+{
+	int noOfBytesSent = 0;
+
+	noOfBytesSent = send(fileDesc, data, size, 0);
+
+	return noOfBytesSent;
+}
+
+static int socket_receive(int fileDesc, void* data, int max_size)
+{
+	int noOfBytesReceived = 0;
+
+	noOfBytesReceived = recv(fileDesc, data, max_size, 0);
+
+	return noOfBytesReceived;
+}
+
+//----- Server -----
 static int get_server_socket_fd(char* portNo)
 {
     int sockfd;
@@ -71,6 +91,27 @@ static int get_server_socket_fd(char* portNo)
     return sockfd;
 }
 
+static int wait_for_connection(int socketFd)
+{
+	struct sockaddr_storage their_addr;
+    socklen_t sin_size;
+
+	sin_size = sizeof their_addr;
+	int new_fd = accept(socketFd, (struct sockaddr *)&their_addr, &sin_size);
+
+    return new_fd;
+}
+
+void init_server_socket(struct socket_server* socket)
+{
+	socket->get_server_socket_fd = &get_server_socket_fd;
+	socket->wait_for_connection = &wait_for_connection;
+	socket->conn.disconnect = &disconnect;
+	socket->conn.send = &socket_send;
+	socket->conn.receive = &socket_receive;
+}
+
+//----- Client -----
 static int connect_to_server(char* address, char* portNo)
 {
     int sockfd;
@@ -111,26 +152,11 @@ static int connect_to_server(char* address, char* portNo)
     return sockfd;
 }
 
-static int wait_for_connection(int socketFd)
-{
-	struct sockaddr_storage their_addr;
-    socklen_t sin_size;
-
-	sin_size = sizeof their_addr;
-	int new_fd = accept(socketFd, (struct sockaddr *)&their_addr, &sin_size);
-
-    return new_fd;
-}
-
 void init_client_socket(struct socket_client* socket)
 {
 	socket->connect = &connect_to_server;
 	socket->conn.disconnect = &disconnect;
+	socket->conn.send = &socket_send;
+	socket->conn.receive = &socket_receive;
 }
 
-void init_server_socket(struct socket_server* socket)
-{
-	socket->get_server_socket_fd = &get_server_socket_fd;
-	socket->wait_for_connection = &wait_for_connection;
-	socket->conn.disconnect = &disconnect;
-}
