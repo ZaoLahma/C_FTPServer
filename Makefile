@@ -2,7 +2,7 @@ CCOMMAND = gcc
 CFLAGS = -Wall -c -Wextra
 LINKARGS = -lpthread
 SOURCES = $(wildcard src/*.c)
-RELEASE_SOURCES = $(wildcard main/*.c)
+RELEASE_SOURCES = $(wildcard src/main/*.c)
 TEST_SOURCES = $(wildcard test/*.c)
 OBJECTS = $(SOURCES:.c=.o)
 RELEASE_OBJECTS = $(RELEASE_SOURCES:.c=.o)

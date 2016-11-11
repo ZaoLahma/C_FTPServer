@@ -55,10 +55,10 @@ void* connect_func(void* arg)
 
 	char recv[4];
 	int noOfBytesReceived = client.conn.receive(serverFd, recv, 4);
-	EXPECT(3, noOfBytesReceived);
+	EXPECT(4, noOfBytesReceived);
 	EXPECT(0, strcmp(recv, "hej"));
 
-	char to_send[6] = {'h', 'e', 'l', 'l', 'o', '\0'};
+	char to_send[6] = "hello";
 	int noOfBytesSent = client.conn.send(serverFd, to_send, 6);
 	EXPECT(6, noOfBytesSent);
 
@@ -101,6 +101,8 @@ int main(void)
 
 	free(testInt);
 
+	printf("----- SOCKET TEST----- \n");
+
 	struct socket_client client;
 	init_client_socket(&client);
 
@@ -115,9 +117,9 @@ int main(void)
 
 	int clientFd = server.wait_for_connection(socketFd);
 
-	char to_send[4] = {'h', 'e', 'j', '\0'};
-	int noOfBytesSent = server.conn.send(clientFd, to_send, 3);
-	EXPECT(3, noOfBytesSent);
+	char to_send[4] = "hej";
+	int noOfBytesSent = server.conn.send(clientFd, to_send, 4);
+	EXPECT(4, noOfBytesSent);
 
 	char recv[6];
 	int noOfBytesReceived = server.conn.receive(clientFd, recv, 6);
