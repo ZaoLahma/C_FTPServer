@@ -11,11 +11,14 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
 typedef struct ClientConn
 {
 	int controlFd;
 	int dataFd;
+	char userName[20];
+	char currDir[100];
 	struct socket_common* connection;
 } ClientConn;
 
@@ -27,7 +30,8 @@ typedef enum FTP_COMMAND
 	USER,
 	QUIT,
 	PASS,
-	SYST
+	SYST,
+	PWD
 } FTP_COMMAND;
 
 typedef struct FtpCommand
@@ -40,7 +44,7 @@ static void ftp_send(ClientConn* clientConn, char* toSend)
 {
 	const unsigned int SEND_BUF_SIZE = strlen(toSend) + 2;
 	char sendBuf[SEND_BUF_SIZE];
-	memcpy(sendBuf, toSend, SEND_BUF_SIZE - 2);
+	strncpy(sendBuf, toSend, SEND_BUF_SIZE);
 	sendBuf[SEND_BUF_SIZE - 2] = '\r';
 	sendBuf[SEND_BUF_SIZE - 1] = '\n';
 
@@ -50,57 +54,82 @@ static void ftp_send(ClientConn* clientConn, char* toSend)
 static FtpCommand get_command(ClientConn* clientConn)
 {
 
-	char receiveBuf[REC_BUF_SIZE];
-	memset(receiveBuf, 0, REC_BUF_SIZE);
+	char receiveBuf[REC_BUF_SIZE] = "";
 
-	FtpCommand retVal;
-	retVal.command = UNKNOWN;
-	memset(retVal.args, 0, 200);
+	FtpCommand command = {UNKNOWN, ""};
+	char commandStr[10] = "";
 
-	if(0 != clientConn->connection->receive(clientConn->controlFd, receiveBuf, REC_BUF_SIZE))
+	if(0 != clientConn->connection->receive(clientConn->controlFd,
+											receiveBuf,
+											REC_BUF_SIZE))
 	{
 		printf("receiveBuf: %s (%d)\n", receiveBuf, (int)strlen(receiveBuf));
 
-		char* substr = 0;
+		sscanf(receiveBuf, "%s %s", commandStr, command.args);
 
-		if((substr = strstr(receiveBuf, "USER")) != 0)
+		if(strcmp("USER", commandStr) == 0)
 		{
-			retVal.command = USER;
+			command.command = USER;
 		}
-		else if(strstr(receiveBuf, "QUIT") != 0)
+		else if(strcmp("QUIT", commandStr) == 0)
 		{
-			retVal.command = QUIT;
+			command.command = QUIT;
 		}
-		else if(strstr(receiveBuf, "PASS") != 0)
+		else if(strcmp("PASS", commandStr) == 0)
 		{
-			retVal.command = PASS;
+			command.command = PASS;
 		}
-		else if(strstr(receiveBuf, "SYST") != 0)
+		else if(strcmp("SYST", commandStr) == 0)
 		{
-			retVal.command = SYST;
+			command.command = SYST;
+		}
+		else if(strcmp("PWD", commandStr) == 0)
+		{
+			command.command = PWD;
 		}
 	}
 	else
 	{
-		retVal.command = QUIT;
+		command.command = QUIT;
 	}
 
-	return retVal;
+	printf("command: %s, %s\n", commandStr, command.args);
+
+	return command;
 }
 
-static void handle_user_command(ClientConn* clientConn)
+static void handle_user_command(FtpCommand* command, ClientConn* clientConn)
 {
+	strncpy(clientConn->userName, command->args, 20);
 	ftp_send(clientConn, "330 OK, send password");
 }
 
-static void handle_pass_command(ClientConn* clientConn)
+static void handle_pass_command(FtpCommand* command, ClientConn* clientConn)
 {
-	ftp_send(clientConn, "230 OK, user logged in");
+	if((strcmp("hihello", command->args) == 0) &&
+	   (strcmp("janne", clientConn->userName) == 0))
+	{
+		strncpy(clientConn->currDir, "/", 100);
+		ftp_send(clientConn, "230 OK, user logged in");
+	}
+	else
+	{
+		ftp_send(clientConn, "530 PASS not correct");
+	}
 }
 
 static void handle_syst_command(ClientConn* clientConn)
 {
 	ftp_send(clientConn, "215 UNIX Type: L8");
+}
+
+static void handle_pwd_command(ClientConn* clientConn)
+{
+	char sendBuf[200];
+	strcat(sendBuf, "257 \"");
+	strcat(sendBuf, clientConn->currDir);
+	strcat(sendBuf, "\"\r\n");
+	ftp_send(clientConn, sendBuf);
 }
 
 static void* client_conn_main(void* arg)
@@ -122,16 +151,19 @@ static void* client_conn_main(void* arg)
 		switch(command.command)
 		{
 		case USER:
-			handle_user_command(clientConn);
+			handle_user_command(&command, clientConn);
 			break;
 		case QUIT:
 			running = 0;
 			break;
 		case PASS:
-			handle_pass_command(clientConn);
+			handle_pass_command(&command, clientConn);
 			break;
 		case SYST:
 			handle_syst_command(clientConn);
+			break;
+		case PWD:
+			handle_pwd_command(clientConn);
 			break;
 		default:
 			ftp_send(clientConn, "500 - Not implemented");
@@ -141,6 +173,8 @@ static void* client_conn_main(void* arg)
 	clientConn->connection->disconnect(clientConn->controlFd);
 
 	printf("Disconnected client with fd: %d\n", clientConn->controlFd);
+
+	free(clientConn);
 
 	return 0;
 }
@@ -168,6 +202,5 @@ void run_ftp()
 		thread.execute_function(&client_conn_main, client);
 	}
 
-	server.conn.disconnect(clientSocketFd);
 	server.conn.disconnect(serverSocketFd);
 }
