@@ -19,7 +19,7 @@ typedef struct ClientConn
 	int dataFd;
 	char userName[20];
 	char currDir[100];
-	struct socket_common* connection;
+	struct socket_server* server;
 } ClientConn;
 
 #define REC_BUF_SIZE 1024
@@ -31,7 +31,9 @@ typedef enum FTP_COMMAND
 	QUIT,
 	PASS,
 	SYST,
-	PWD
+	PWD,
+	LIST,
+	PORT
 } FTP_COMMAND;
 
 typedef struct FtpCommand
@@ -48,7 +50,7 @@ static void ftp_send(ClientConn* clientConn, char* toSend)
 	sendBuf[SEND_BUF_SIZE - 2] = '\r';
 	sendBuf[SEND_BUF_SIZE - 1] = '\n';
 
-	clientConn->connection->send(clientConn->controlFd, sendBuf, SEND_BUF_SIZE);
+	clientConn->server->conn.send(clientConn->controlFd, sendBuf, SEND_BUF_SIZE);
 }
 
 static FtpCommand get_command(ClientConn* clientConn)
@@ -59,9 +61,9 @@ static FtpCommand get_command(ClientConn* clientConn)
 	FtpCommand command = {UNKNOWN, ""};
 	char commandStr[10] = "";
 
-	if(0 != clientConn->connection->receive(clientConn->controlFd,
-											receiveBuf,
-											REC_BUF_SIZE))
+	if(0 != clientConn->server->conn.receive(clientConn->controlFd,
+			receiveBuf,
+			REC_BUF_SIZE))
 	{
 		printf("receiveBuf: %s (%d)\n", receiveBuf, (int)strlen(receiveBuf));
 
@@ -86,6 +88,14 @@ static FtpCommand get_command(ClientConn* clientConn)
 		else if(strcmp("PWD", commandStr) == 0)
 		{
 			command.command = PWD;
+		}
+		else if(strcmp("LIST", commandStr) == 0)
+		{
+			command.command = LIST;
+		}
+		else if(strcmp("PORT", commandStr) == 0)
+		{
+			command.command = PORT;
 		}
 	}
 	else
@@ -125,11 +135,39 @@ static void handle_syst_command(ClientConn* clientConn)
 
 static void handle_pwd_command(ClientConn* clientConn)
 {
-	char sendBuf[200];
-	strcat(sendBuf, "257 \"");
-	strcat(sendBuf, clientConn->currDir);
-	strcat(sendBuf, "\"\r\n");
+	const unsigned int SEND_BUF_SIZE = 200;
+	char sendBuf[SEND_BUF_SIZE];
+	strncat(sendBuf, "257 \"", SEND_BUF_SIZE);
+	strncat(sendBuf, clientConn->currDir, SEND_BUF_SIZE);
+	strncat(sendBuf, "\"\r\n", SEND_BUF_SIZE);
 	ftp_send(clientConn, sendBuf);
+}
+
+static void handle_list_command(FtpCommand* command, ClientConn* clientConn)
+{
+
+}
+
+static void handle_port_command(FtpCommand* command, ClientConn* clientConn)
+{
+	int first = 0;
+	int second = 0;
+	int third = 0;
+	int fourth = 0;
+
+	int high = 0;
+	int low = 0;
+
+	sscanf(command->args,
+			"%d,%d,%d,%d,%d,%d",
+			&first,
+			&second,
+			&third,
+			&fourth,
+			&high,
+			&low);
+
+	printf("first: %d\n", first);
 }
 
 static void* client_conn_main(void* arg)
@@ -165,12 +203,18 @@ static void* client_conn_main(void* arg)
 		case PWD:
 			handle_pwd_command(clientConn);
 			break;
+		case LIST:
+			handle_list_command(&command, clientConn);
+			break;
+		case PORT:
+			handle_port_command(&command, clientConn);
+			break;
 		default:
 			ftp_send(clientConn, "500 - Not implemented");
 		}
 	}
 
-	clientConn->connection->disconnect(clientConn->controlFd);
+	clientConn->server->conn.disconnect(clientConn->controlFd);
 
 	printf("Disconnected client with fd: %d\n", clientConn->controlFd);
 
@@ -197,7 +241,7 @@ void run_ftp()
 
 		struct ClientConn* client = (struct ClientConn*)malloc(sizeof(struct ClientConn));
 		client->controlFd = clientSocketFd;
-		client->connection = &server.conn;
+		client->server = &server;
 
 		thread.execute_function(&client_conn_main, client);
 	}
