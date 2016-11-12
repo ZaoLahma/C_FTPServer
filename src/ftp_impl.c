@@ -12,31 +12,36 @@
 #include <stdlib.h>
 #include <string.h>
 
-struct client_conn
+typedef struct client_conn
 {
 	int controlFd;
 	int dataFd;
 	struct socket_common* connection;
-};
+} client_conn;
 
-static void handshake(struct client_conn* clientConn)
+#define REC_BUF_SIZE 1024
+
+static int handshake(client_conn* clientConn)
 {
 	clientConn->connection->send(clientConn->controlFd, "220 OK.\r\n", 9);
 
-	char receiveBuf[100];
+	char receiveBuf[REC_BUF_SIZE];
 
 	clientConn->connection->receive(clientConn->controlFd, receiveBuf, 100);
 
-	printf("receiveBuf: %s (%d)\n", receiveBuf, strlen(receiveBuf));
+	printf("receiveBuf: %s (%d)\n", receiveBuf, (int)strlen(receiveBuf));
 
-
+	return 0;
 }
 
 static void* client_conn_main(void* arg)
 {
-	struct client_conn* clientConn = (struct client_conn*)arg;
+	client_conn* clientConn = (client_conn*)arg;
 
-	handshake(clientConn);
+	if(0 == handshake(clientConn))
+	{
+
+	}
 
 	clientConn->connection->disconnect(clientConn->controlFd);
 
@@ -52,7 +57,7 @@ void run_ftp()
 	int serverSocketFd = server.get_server_socket_fd("3370");
 	int clientSocketFd = -1;
 
-	struct ThreadStarter thread;
+	ThreadStarter thread;
 	init_thread_starter(&thread, POOL);
 
 	while(1)
