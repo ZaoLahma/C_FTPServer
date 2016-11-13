@@ -143,9 +143,44 @@ static void handle_pwd_command(ClientConn* clientConn)
 	ftp_send(clientConn, sendBuf);
 }
 
+static char* exec_proc(char* command)
+{
+	char buffer[4096];
+	char* result = (char*)malloc(sizeof(char) * 1000);
+	memset(result, 0, 1000);
+
+	const unsigned int CMD_LEN = strlen(command) + 4;
+
+	char cmd[CMD_LEN];
+	memset(cmd, 0, CMD_LEN);
+	memcpy(cmd, command, CMD_LEN - 4);
+	/*
+	cmd[CMD_LEN - 4] = '2';
+	cmd[CMD_LEN - 3] = '>';
+	cmd[CMD_LEN - 2] = '&';
+	cmd[CMD_LEN - 1] = '1';
+	*/
+
+	printf("cmd: %s\n", cmd);
+
+	FILE* file = popen(cmd, "r");
+
+	while (!feof(file)) {
+		if (fgets(buffer, 4096, file) != 0) {
+			strncat(result, buffer, 1000);
+		}
+	}
+
+	pclose(file);
+
+	printf("result: %s\n", result);
+
+	return result;
+}
+
 static void handle_list_command(FtpCommand* command, ClientConn* clientConn)
 {
-
+	char* response = exec_proc("ls -l ");
 }
 
 static void handle_port_command(FtpCommand* command, ClientConn* clientConn)
@@ -158,6 +193,8 @@ static void handle_port_command(FtpCommand* command, ClientConn* clientConn)
 	int high = 0;
 	int low = 0;
 
+	int portNo = 0;
+
 	sscanf(command->args,
 			"%d,%d,%d,%d,%d,%d",
 			&first,
@@ -167,7 +204,41 @@ static void handle_port_command(FtpCommand* command, ClientConn* clientConn)
 			&high,
 			&low);
 
-	printf("first: %d\n", first);
+	char address[24] = "";
+
+	char addrBuf[4] = "";
+
+	sprintf(addrBuf, "%d", first);
+	strncat(address, addrBuf, 24);
+	strncat(address, ".", 24);
+
+	sprintf(addrBuf, "%d", second);
+	strncat(address, addrBuf, 24);
+	strncat(address, ".", 24);
+
+	sprintf(addrBuf, "%d", third);
+	strncat(address, addrBuf, 24);
+	strncat(address, ".", 24);
+
+	sprintf(addrBuf, "%d", fourth);
+	strncat(address, addrBuf, 24);
+
+	printf("address: %s\n", address);
+
+	socket_client client;
+	init_client_socket(&client);
+
+	high = high * 256;
+
+	portNo = high + low;
+
+	char portBuf[6] = "";
+
+	sprintf(portBuf, "%d", portNo);
+
+	clientConn->dataFd = client.connect(address, portBuf);
+
+	ftp_send(clientConn, "200 PORT command successful");
 }
 
 static void* client_conn_main(void* arg)
