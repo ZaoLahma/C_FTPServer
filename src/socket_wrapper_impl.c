@@ -15,6 +15,10 @@
 #include <unistd.h>
 #include <string.h>
 
+#include <stdio.h>
+
+#include <errno.h>
+
 //----- Common -----
 static void disconnect(int socketFd)
 {
@@ -119,13 +123,13 @@ static int connect_to_server(char* address, char* portNo)
     struct addrinfo hints;
 	struct addrinfo* servinfo;
 	struct addrinfo* p;
-    int rv;
 
     memset(&hints, 0, sizeof hints);
     hints.ai_family = AF_UNSPEC;
     hints.ai_socktype = SOCK_STREAM;
 
-    if ((rv = getaddrinfo(address, portNo, &hints, &servinfo)) != 0) {
+    if (getaddrinfo(address, portNo, &hints, &servinfo) != 0) {
+    	printf("getddrinfo\n");
         return -1;
     }
 
@@ -144,6 +148,7 @@ static int connect_to_server(char* address, char* portNo)
     }
 
     if (p == 0) {
+    	printf("p==0, errno: %d\n", errno);
         return -1;
     }
 

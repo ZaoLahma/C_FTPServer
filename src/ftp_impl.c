@@ -12,6 +12,9 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <sys/types.h>
+#include <dirent.h>
+#include <fcntl.h>
 
 typedef struct ClientConn
 {
@@ -42,7 +45,7 @@ typedef struct FtpCommand
 	char args[200];
 } FtpCommand;
 
-static void ftp_send(ClientConn* clientConn, char* toSend)
+static void ftp_send(int fd, ClientConn* clientConn, char* toSend)
 {
 	const unsigned int SEND_BUF_SIZE = strlen(toSend) + 2;
 	char sendBuf[SEND_BUF_SIZE];
@@ -50,7 +53,11 @@ static void ftp_send(ClientConn* clientConn, char* toSend)
 	sendBuf[SEND_BUF_SIZE - 2] = '\r';
 	sendBuf[SEND_BUF_SIZE - 1] = '\n';
 
-	clientConn->server->conn.send(clientConn->controlFd, sendBuf, SEND_BUF_SIZE);
+	printf("ftp_send sending: %s\n", sendBuf);
+
+	int noOfBytesSent = clientConn->server->conn.send(fd, sendBuf, SEND_BUF_SIZE);
+
+	printf("ftp_send sent %d no of bytes\n", noOfBytesSent);
 }
 
 static FtpCommand get_command(ClientConn* clientConn)
@@ -111,7 +118,7 @@ static FtpCommand get_command(ClientConn* clientConn)
 static void handle_user_command(FtpCommand* command, ClientConn* clientConn)
 {
 	strncpy(clientConn->userName, command->args, 20);
-	ftp_send(clientConn, "330 OK, send password");
+	ftp_send(clientConn->controlFd, clientConn, "330 OK, send password");
 }
 
 static void handle_pass_command(FtpCommand* command, ClientConn* clientConn)
@@ -120,17 +127,17 @@ static void handle_pass_command(FtpCommand* command, ClientConn* clientConn)
 	   (strcmp("janne", clientConn->userName) == 0))
 	{
 		strncpy(clientConn->currDir, "/", 100);
-		ftp_send(clientConn, "230 OK, user logged in");
+		ftp_send(clientConn->controlFd, clientConn, "230 OK, user logged in");
 	}
 	else
 	{
-		ftp_send(clientConn, "530 PASS not correct");
+		ftp_send(clientConn->controlFd, clientConn, "530 PASS not correct");
 	}
 }
 
 static void handle_syst_command(ClientConn* clientConn)
 {
-	ftp_send(clientConn, "215 UNIX Type: L8");
+	ftp_send(clientConn->controlFd, clientConn, "215 UNIX Type: L8");
 }
 
 static void handle_pwd_command(ClientConn* clientConn)
@@ -140,47 +147,34 @@ static void handle_pwd_command(ClientConn* clientConn)
 	strncat(sendBuf, "257 \"", SEND_BUF_SIZE);
 	strncat(sendBuf, clientConn->currDir, SEND_BUF_SIZE);
 	strncat(sendBuf, "\"\r\n", SEND_BUF_SIZE);
-	ftp_send(clientConn, sendBuf);
-}
 
-static char* exec_proc(char* command)
-{
-	char buffer[4096];
-	char* result = (char*)malloc(sizeof(char) * 1000);
-	memset(result, 0, 1000);
-
-	const unsigned int CMD_LEN = strlen(command) + 4;
-
-	char cmd[CMD_LEN];
-	memset(cmd, 0, CMD_LEN);
-	memcpy(cmd, command, CMD_LEN - 4);
-	/*
-	cmd[CMD_LEN - 4] = '2';
-	cmd[CMD_LEN - 3] = '>';
-	cmd[CMD_LEN - 2] = '&';
-	cmd[CMD_LEN - 1] = '1';
-	*/
-
-	printf("cmd: %s\n", cmd);
-
-	FILE* file = popen(cmd, "r");
-
-	while (!feof(file)) {
-		if (fgets(buffer, 4096, file) != 0) {
-			strncat(result, buffer, 1000);
-		}
-	}
-
-	pclose(file);
-
-	printf("result: %s\n", result);
-
-	return result;
+	ftp_send(clientConn->controlFd, clientConn, sendBuf);
 }
 
 static void handle_list_command(FtpCommand* command, ClientConn* clientConn)
 {
-	char* response = exec_proc("ls -l ");
+	int dirFd = open(clientConn->currDir, O_RDONLY);
+
+	DIR* dirContents = fdopendir(dirFd);
+
+	struct dirent* dirEnt;
+
+	if(dirContents)
+	{
+		char sendBuf[256] = "";
+
+		while((dirEnt = readdir(dirContents)) != 0)
+		{
+			memset(sendBuf, 0, 256);
+			sprintf(sendBuf, "%s", dirEnt->d_name);
+			ftp_send(clientConn->dataFd, clientConn, sendBuf);
+		}
+	}
+
+	closedir(dirContents);
+
+	ftp_send(clientConn->controlFd, clientConn, "226 LIST data send finished");
+	clientConn->server->conn.disconnect(clientConn->dataFd);
 }
 
 static void handle_port_command(FtpCommand* command, ClientConn* clientConn)
@@ -205,6 +199,7 @@ static void handle_port_command(FtpCommand* command, ClientConn* clientConn)
 			&low);
 
 	char address[24] = "";
+	address[23] = '\0';
 
 	char addrBuf[4] = "";
 
@@ -233,12 +228,17 @@ static void handle_port_command(FtpCommand* command, ClientConn* clientConn)
 	portNo = high + low;
 
 	char portBuf[6] = "";
+	portBuf[5] = '\0';
 
 	sprintf(portBuf, "%d", portNo);
 
+	printf("portNo: %s\n", portBuf);
+
 	clientConn->dataFd = client.connect(address, portBuf);
 
-	ftp_send(clientConn, "200 PORT command successful");
+	printf("dataFd: %d\n", clientConn->dataFd);
+
+	ftp_send(clientConn->controlFd, clientConn, "200 PORT command successful");
 }
 
 static void* client_conn_main(void* arg)
@@ -247,7 +247,7 @@ static void* client_conn_main(void* arg)
 
 	printf("New client connected with fd: %d\n", clientConn->controlFd);
 
-	ftp_send(clientConn, "220 OK");
+	ftp_send(clientConn->controlFd, clientConn, "220 OK");
 
 	FtpCommand command;
 
@@ -281,7 +281,7 @@ static void* client_conn_main(void* arg)
 			handle_port_command(&command, clientConn);
 			break;
 		default:
-			ftp_send(clientConn, "500 - Not implemented");
+			ftp_send(clientConn->controlFd, clientConn, "500 - Not implemented");
 		}
 	}
 
