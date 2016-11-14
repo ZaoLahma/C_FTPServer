@@ -15,8 +15,6 @@ static struct QueueItem* queue = 0;
 static pthread_mutex_t mutex;
 static struct PoolThreadFunc* threads;
 static int num_threads = 0;
-unsigned int const POOL = 0;
-unsigned int const DETACHED = 1;
 
 //Detached thread impl
 static void execute_job_detached_thread_impl(void* (*thread_func)(void*), void* arg)

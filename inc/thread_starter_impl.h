@@ -10,8 +10,8 @@
 
 #include "thread_starter.h"
 
-extern unsigned int const DETACHED;
-extern unsigned int const POOL;
+static const unsigned int DETACHED = 0;
+static const unsigned int POOL = 1;
 
 //Function implementation
 void init_thread_starter(struct ThreadStarter* threadStarter,
