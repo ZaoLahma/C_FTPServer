@@ -161,7 +161,8 @@ static void exec_proc(ClientConn* clientConn, char* cmd)
 	while (!feof(file)) {
 		if (fgets(buffer, 4096, file) != 0) {
 			int lineLength = strlen(buffer);
-			buffer[lineLength - 1] = '\0';
+			buffer[lineLength - 1] = '\r';
+			buffer[lineLength - 1] = '\n';
 			ftp_send(clientConn->dataFd, clientConn, buffer);
 			memset(buffer, 0, 4096);
 		}
@@ -173,27 +174,6 @@ static void exec_proc(ClientConn* clientConn, char* cmd)
 static void handle_list_command(FtpCommand* command, ClientConn* clientConn)
 {
 	exec_proc(clientConn, "ls -l");
-	/*
-	int dirFd = open(clientConn->currDir, O_RDONLY);
-
-	DIR* dirContents = fdopendir(dirFd);
-
-	struct dirent* dirEnt;
-
-	if(dirContents)
-	{
-		char sendBuf[256] = "";
-
-		while((dirEnt = readdir(dirContents)) != 0)
-		{
-			memset(sendBuf, 0, 256);
-			sprintf(sendBuf, "%s", dirEnt->d_name);
-			ftp_send(clientConn->dataFd, clientConn, sendBuf);
-		}
-	}
-
-	closedir(dirContents);
-	*/
 
 	ftp_send(clientConn->controlFd, clientConn, "226 LIST data send finished");
 	clientConn->server->conn.disconnect(clientConn->dataFd);
