@@ -6,10 +6,15 @@
  */
 
 #include "../../inc/ftp_impl.h"
+#include <stdlib.h>
 
 int main()
 {
-	run_ftp(1);
+	int* running = (int*)malloc(sizeof(int));
+	*running = 1;
+	run_ftp(running);
+
+	free(running);
 
 	return 0;
 }

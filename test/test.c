@@ -135,6 +135,13 @@ void* ftp_test_func(void* arg)
 
 	EXPECT(1, (0xffffffff != (unsigned int)*clientFd));
 
+	client.conn.send(serverFd, "LIST\r\n", 6);
+
+	while(0 != client.conn.receive(*clientFd, receiveBuf, 100))
+	{
+		printf("receiveBuf: %s\n", receiveBuf);
+	}
+
 	client.conn.disconnect(*clientFd);
 
 	client.conn.send(serverFd, "QUIT\r\n", 6);

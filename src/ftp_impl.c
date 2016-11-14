@@ -54,7 +54,7 @@ static void ftp_send(int fd, ClientConn* clientConn, char* toSend)
 	sendBuf[SEND_BUF_SIZE - 2] = '\r';
 	sendBuf[SEND_BUF_SIZE - 1] = '\n';
 
-	printf("ftp_send sending: %s\n", sendBuf);
+	printf("ftp_send sending: %s on file descriptor: %d\n", sendBuf, fd);
 
 	int noOfBytesSent = clientConn->server->conn.send(fd, sendBuf, SEND_BUF_SIZE);
 
@@ -152,8 +152,28 @@ static void handle_pwd_command(ClientConn* clientConn)
 	ftp_send(clientConn->controlFd, clientConn, sendBuf);
 }
 
+static void exec_proc(ClientConn* clientConn, char* cmd)
+{
+	char buffer[4096] = "";
+
+	FILE* file = popen(cmd, "r");
+
+	while (!feof(file)) {
+		if (fgets(buffer, 4096, file) != 0) {
+			int lineLength = strlen(buffer);
+			buffer[lineLength - 1] = '\0';
+			ftp_send(clientConn->dataFd, clientConn, buffer);
+			memset(buffer, 0, 4096);
+		}
+	}
+
+	pclose(file);
+}
+
 static void handle_list_command(FtpCommand* command, ClientConn* clientConn)
 {
+	exec_proc(clientConn, "ls -l");
+	/*
 	int dirFd = open(clientConn->currDir, O_RDONLY);
 
 	DIR* dirContents = fdopendir(dirFd);
@@ -173,6 +193,7 @@ static void handle_list_command(FtpCommand* command, ClientConn* clientConn)
 	}
 
 	closedir(dirContents);
+	*/
 
 	ftp_send(clientConn->controlFd, clientConn, "226 LIST data send finished");
 	clientConn->server->conn.disconnect(clientConn->dataFd);
