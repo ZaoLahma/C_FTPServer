@@ -12,6 +12,7 @@
 #include "../inc/thread_starter.h"
 #include "../inc/thread_starter_impl.h"
 #include "../inc/socket_wrapper_impl.h"
+#include "../inc/ftp_impl.h"
 
 #define EXPECT(this, that) \
 if(this != that) \
@@ -68,7 +69,51 @@ void* connect_func(void* arg)
 	return 0;
 }
 
-int main(void)
+
+void* ftp_test_func(void* arg)
+{
+	printf("arg: %p\n", arg);
+
+	int* running = (int*)arg;
+
+	char receiveBuf[100] = "";
+
+	struct socket_client client;
+	init_client_socket(&client);
+
+	sleep(1);
+
+	int serverFd = client.connect("127.0.0.1", "3370");
+
+	client.conn.receive(serverFd, receiveBuf, 100);
+
+	EXPECT(0, strcmp("220 OK\r\n", receiveBuf));
+
+	client.conn.send(serverFd, "USER janne\r\n", 12);
+
+	client.conn.receive(serverFd, receiveBuf, 100);
+
+	EXPECT(0, strcmp("330 OK, send password\r\n", receiveBuf));
+
+	client.conn.send(serverFd, "PASS hihello\r\n", 14);
+
+	client.conn.receive(serverFd, receiveBuf, 100);
+
+	EXPECT(0, strcmp("230 OK, user logged in\r\n", receiveBuf));
+
+	client.conn.send(serverFd, "QUIT\r\n", 6);
+
+	client.conn.receive(serverFd, receiveBuf, 100);
+
+	EXPECT(0, strcmp("221 Bye Bye\r\n", receiveBuf));
+
+	*running = 0;
+	serverFd = client.connect("127.0.0.1", "3370");
+
+	return 0;
+}
+
+void test_framework()
 {
 	printf("----- DETACHED TEST----- \n");
 
@@ -128,6 +173,26 @@ int main(void)
 
 	server.conn.disconnect(clientFd);
 	server.conn.disconnect(socketFd);
+}
 
+void test_ftp()
+{
+	struct ThreadStarter threadStarter;
+	init_thread_starter(&threadStarter, DETACHED);
+
+	int* running = (int*)malloc(sizeof(int));
+	*running = 1;
+
+	threadStarter.execute_function(&ftp_test_func, running);
+
+	run_ftp(running);
+
+	free(running);
+}
+
+int main(void)
+{
+	//test_framework();
+	test_ftp();
 	return 0;
 }

@@ -9,7 +9,7 @@
 
 int main()
 {
-	run_ftp();
+	run_ftp(1);
 
 	return 0;
 }

@@ -49,6 +49,7 @@ static void ftp_send(int fd, ClientConn* clientConn, char* toSend)
 {
 	const unsigned int SEND_BUF_SIZE = strlen(toSend) + 2;
 	char sendBuf[SEND_BUF_SIZE];
+	memset(sendBuf, 0, SEND_BUF_SIZE);
 	strncpy(sendBuf, toSend, SEND_BUF_SIZE);
 	sendBuf[SEND_BUF_SIZE - 2] = '\r';
 	sendBuf[SEND_BUF_SIZE - 1] = '\n';
@@ -241,6 +242,11 @@ static void handle_port_command(FtpCommand* command, ClientConn* clientConn)
 	ftp_send(clientConn->controlFd, clientConn, "200 PORT command successful");
 }
 
+static void handle_quit_command(ClientConn* clientConn)
+{
+	ftp_send(clientConn->controlFd, clientConn, "221 Bye Bye");
+}
+
 static void* client_conn_main(void* arg)
 {
 	ClientConn* clientConn = (ClientConn*)arg;
@@ -263,6 +269,7 @@ static void* client_conn_main(void* arg)
 			handle_user_command(&command, clientConn);
 			break;
 		case QUIT:
+			handle_quit_command(clientConn);
 			running = 0;
 			break;
 		case PASS:
@@ -294,9 +301,9 @@ static void* client_conn_main(void* arg)
 	return 0;
 }
 
-void run_ftp()
+void run_ftp(int* running)
 {
-	printf("FTP server starting\n");
+	printf("FTP server starting, running: %d\n", *running);
 	struct socket_server server;
 	init_server_socket(&server);
 
@@ -306,15 +313,18 @@ void run_ftp()
 	ThreadStarter thread;
 	init_thread_starter(&thread, POOL);
 
-	while(1)
+	while(*running)
 	{
 		clientSocketFd = server.wait_for_connection(serverSocketFd);
 
-		struct ClientConn* client = (struct ClientConn*)malloc(sizeof(struct ClientConn));
-		client->controlFd = clientSocketFd;
-		client->server = &server;
+		if(*running)
+		{
+			struct ClientConn* client = (struct ClientConn*)malloc(sizeof(struct ClientConn));
+			client->controlFd = clientSocketFd;
+			client->server = &server;
 
-		thread.execute_function(&client_conn_main, client);
+			thread.execute_function(&client_conn_main, client);
+		}
 	}
 
 	server.conn.disconnect(serverSocketFd);
