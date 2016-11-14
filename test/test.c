@@ -69,6 +69,23 @@ void* connect_func(void* arg)
 	return 0;
 }
 
+#define TEST_PORT_NO "45972"
+
+void* ftp_test_port_func(void* arg)
+{
+	struct socket_server server;
+	init_server_socket(&server);
+
+	int serverFd = server.get_server_socket_fd(TEST_PORT_NO);
+
+	int* clientFd = (int*)arg;
+
+	printf("Waiting for connection\n");
+
+	*clientFd = server.wait_for_connection(serverFd);
+
+	return 0;
+}
 
 void* ftp_test_func(void* arg)
 {
@@ -101,11 +118,42 @@ void* ftp_test_func(void* arg)
 
 	EXPECT(0, strcmp("230 OK, user logged in\r\n", receiveBuf));
 
+	struct ThreadStarter threadStarter;
+	init_thread_starter(&threadStarter, DETACHED);
+
+	int* clientFd = (int*)malloc(sizeof(int));
+	*clientFd = 0xffffffff;
+	threadStarter.execute_function(&ftp_test_port_func, clientFd);
+
+	sleep(1);
+
+	client.conn.send(serverFd, "PORT 127,0,0,1,179,148\r\n", 24);
+
+	client.conn.receive(serverFd, receiveBuf, 100);
+
+	EXPECT(0, strcmp("200 PORT command successful\r\n", receiveBuf));
+
+	EXPECT(1, (0xffffffff != (unsigned int)*clientFd));
+
+	client.conn.disconnect(*clientFd);
+
 	client.conn.send(serverFd, "QUIT\r\n", 6);
 
 	client.conn.receive(serverFd, receiveBuf, 100);
 
-	EXPECT(0, strcmp("221 Bye Bye\r\n", receiveBuf));
+	EXPECT(receiveBuf[0],  '2');
+	EXPECT(receiveBuf[1],  '2');
+	EXPECT(receiveBuf[2],  '1');
+	EXPECT(receiveBuf[3],  ' ');
+	EXPECT(receiveBuf[4],  'B');
+	EXPECT(receiveBuf[5],  'y');
+	EXPECT(receiveBuf[6],  'e');
+	EXPECT(receiveBuf[7],  ' ');
+	EXPECT(receiveBuf[8],  'B');
+	EXPECT(receiveBuf[9],  'y');
+	EXPECT(receiveBuf[10], 'e');
+	EXPECT(receiveBuf[11], '\r');
+	EXPECT(receiveBuf[12], '\n');
 
 	*running = 0;
 	serverFd = client.connect("127.0.0.1", "3370");
