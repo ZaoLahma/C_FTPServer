@@ -162,7 +162,7 @@ static void exec_proc(ClientConn* clientConn, char* cmd)
 		if (fgets(buffer, 4096, file) != 0) {
 			int lineLength = strlen(buffer);
 			buffer[lineLength - 1] = '\r';
-			buffer[lineLength - 1] = '\n';
+			buffer[lineLength]     = '\n';
 			ftp_send(clientConn->dataFd, clientConn, buffer);
 			memset(buffer, 0, 4096);
 		}
