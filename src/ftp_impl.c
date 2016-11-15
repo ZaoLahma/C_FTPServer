@@ -73,6 +73,8 @@ static FtpCommand get_command(ClientConn* clientConn)
 							receiveBuf,
 							REC_BUF_SIZE);
 
+	receiveBuf[noOfBytesReceived] = '\0';
+
 	printf("noOfBytesReceived: %d\n", noOfBytesReceived);
 
 	if(0 != noOfBytesReceived)
