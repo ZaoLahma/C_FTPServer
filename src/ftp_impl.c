@@ -42,7 +42,8 @@ typedef enum FTP_COMMAND
 typedef struct FtpCommand
 {
 	FTP_COMMAND command;
-	char args[200];
+	char args[75];
+	char commandStr[20];
 } FtpCommand;
 
 static void ftp_send(int fd, ClientConn* clientConn, char* toSend)
@@ -66,42 +67,47 @@ static FtpCommand get_command(ClientConn* clientConn)
 
 	char receiveBuf[REC_BUF_SIZE] = "";
 
-	FtpCommand command = {UNKNOWN, ""};
-	char commandStr[10] = "";
+	FtpCommand command = {UNKNOWN, "", ""};
 
-	if(0 != clientConn->server->conn.receive(clientConn->controlFd,
-			receiveBuf,
-			REC_BUF_SIZE))
+	int noOfBytesReceived = clientConn->server->conn.receive(clientConn->controlFd,
+							receiveBuf,
+							REC_BUF_SIZE);
+
+	printf("noOfBytesReceived: %d\n", noOfBytesReceived);
+
+	if(0 != noOfBytesReceived)
 	{
+		receiveBuf[noOfBytesReceived - 2] = '\0';
+
 		printf("receiveBuf: %s (%d)\n", receiveBuf, (int)strlen(receiveBuf));
 
-		sscanf(receiveBuf, "%s %s", commandStr, command.args);
+		sscanf(receiveBuf, "%s %s", command.commandStr, command.args);
 
-		if(strcmp("USER", commandStr) == 0)
+		if(strcmp("USER", command.commandStr) == 0)
 		{
 			command.command = USER;
 		}
-		else if(strcmp("QUIT", commandStr) == 0)
+		else if(strcmp("QUIT", command.commandStr) == 0)
 		{
 			command.command = QUIT;
 		}
-		else if(strcmp("PASS", commandStr) == 0)
+		else if(strcmp("PASS", command.commandStr) == 0)
 		{
 			command.command = PASS;
 		}
-		else if(strcmp("SYST", commandStr) == 0)
+		else if(strcmp("SYST", command.commandStr) == 0)
 		{
 			command.command = SYST;
 		}
-		else if(strcmp("PWD", commandStr) == 0)
+		else if(strcmp("PWD", command.commandStr) == 0)
 		{
 			command.command = PWD;
 		}
-		else if(strcmp("LIST", commandStr) == 0)
+		else if(strcmp("LIST", command.commandStr) == 0)
 		{
 			command.command = LIST;
 		}
-		else if(strcmp("PORT", commandStr) == 0)
+		else if(strcmp("PORT", command.commandStr) == 0)
 		{
 			command.command = PORT;
 		}
@@ -111,7 +117,7 @@ static FtpCommand get_command(ClientConn* clientConn)
 		command.command = QUIT;
 	}
 
-	printf("command: %s, %s\n", commandStr, command.args);
+	printf("command: %s, %s\n", command.commandStr, command.args);
 
 	return command;
 }
@@ -173,70 +179,48 @@ static void exec_proc(ClientConn* clientConn, char* cmd)
 
 static void handle_list_command(FtpCommand* command, ClientConn* clientConn)
 {
+	ftp_send(clientConn->controlFd, clientConn, "150 LIST executed ok, data follows");
 	exec_proc(clientConn, "ls -l");
-
 	ftp_send(clientConn->controlFd, clientConn, "226 LIST data send finished");
 	clientConn->server->conn.disconnect(clientConn->dataFd);
 }
 
 static void handle_port_command(FtpCommand* command, ClientConn* clientConn)
 {
-	int first = 0;
-	int second = 0;
-	int third = 0;
-	int fourth = 0;
+	unsigned char address[4];
 
-	int high = 0;
-	int low = 0;
-
-	int portNo = 0;
+	unsigned char ports[2];
 
 	sscanf(command->args,
-			"%d,%d,%d,%d,%d,%d",
-			&first,
-			&second,
-			&third,
-			&fourth,
-			&high,
-			&low);
+			"%hhu,%hhu,%hhu,%hhu,%hhu,%hhu",
+			&address[0],
+			&address[1],
+			&address[2],
+			&address[3],
+			&ports[0],
+			&ports[1]);
 
-	char address[24] = "";
-	address[23] = '\0';
+	char addrString[24] = "";
 
-	char addrBuf[4] = "";
+	sprintf(addrString,
+			"%d.%d.%d.%d",
+			address[0],
+			address[1],
+			address[2],
+			address[3]);
 
-	sprintf(addrBuf, "%d", first);
-	strncat(address, addrBuf, 24);
-	strncat(address, ".", 24);
+	printf("addrString: %s\n", addrString);
 
-	sprintf(addrBuf, "%d", second);
-	strncat(address, addrBuf, 24);
-	strncat(address, ".", 24);
+	unsigned int portNo = (ports[0] << 8) + ports[1];
+	printf("portNo: %d\n", portNo);
 
-	sprintf(addrBuf, "%d", third);
-	strncat(address, addrBuf, 24);
-	strncat(address, ".", 24);
-
-	sprintf(addrBuf, "%d", fourth);
-	strncat(address, addrBuf, 24);
-
-	printf("address: %s\n", address);
+	char portString[6] = "";
+	sprintf(portString, "%u", portNo);
 
 	socket_client client;
 	init_client_socket(&client);
 
-	high = high * 256;
-
-	portNo = high + low;
-
-	char portBuf[6] = "";
-	portBuf[5] = '\0';
-
-	sprintf(portBuf, "%d", portNo);
-
-	printf("portNo: %s\n", portBuf);
-
-	clientConn->dataFd = client.connect(address, portBuf);
+	clientConn->dataFd = client.connect(addrString, portString);
 
 	printf("dataFd: %d\n", clientConn->dataFd);
 

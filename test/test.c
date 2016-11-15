@@ -137,10 +137,12 @@ void* ftp_test_func(void* arg)
 
 	client.conn.send(serverFd, "LIST\r\n", 6);
 
+	/*
 	while(0 != client.conn.receive(*clientFd, receiveBuf, 100))
 	{
 		printf("receiveBuf: %s\n", receiveBuf);
 	}
+	*/
 
 	client.conn.disconnect(*clientFd);
 
