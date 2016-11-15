@@ -43,6 +43,7 @@ typedef struct FtpCommand
 {
 	FTP_COMMAND command;
 	char args[75];
+	char commandStr[20];
 } FtpCommand;
 
 static void ftp_send(int fd, ClientConn* clientConn, char* toSend)
@@ -61,12 +62,12 @@ static void ftp_send(int fd, ClientConn* clientConn, char* toSend)
 	printf("ftp_send sent %d no of bytes\n", noOfBytesSent);
 }
 
-static void get_command(FtpCommand* command, ClientConn* clientConn)
+static FtpCommand get_command(ClientConn* clientConn)
 {
 
 	char receiveBuf[REC_BUF_SIZE] = "";
 
-	char commandStr[75] = "";
+	FtpCommand command = {UNKNOWN, "", ""};
 
 	int noOfBytesReceived = clientConn->server->conn.receive(clientConn->controlFd,
 							receiveBuf,
@@ -82,43 +83,45 @@ static void get_command(FtpCommand* command, ClientConn* clientConn)
 
 		printf("receiveBuf: %s (%d)\n", receiveBuf, (int)strlen(receiveBuf));
 
-		sscanf(receiveBuf, "%s %s", commandStr, command->args);
+		sscanf(receiveBuf, "%s %s", command.commandStr, command.args);
 
-		if(strcmp("USER", commandStr) == 0)
+		if(strcmp("USER", command.commandStr) == 0)
 		{
-			command->command = USER;
+			command.command = USER;
 		}
-		else if(strcmp("QUIT", commandStr) == 0)
+		else if(strcmp("QUIT", command.commandStr) == 0)
 		{
-			command->command = QUIT;
+			command.command = QUIT;
 		}
-		else if(strcmp("PASS", commandStr) == 0)
+		else if(strcmp("PASS", command.commandStr) == 0)
 		{
-			command->command = PASS;
+			command.command = PASS;
 		}
-		else if(strcmp("SYST", commandStr) == 0)
+		else if(strcmp("SYST", command.commandStr) == 0)
 		{
-			command->command = SYST;
+			command.command = SYST;
 		}
-		else if(strcmp("PWD", commandStr) == 0)
+		else if(strcmp("PWD", command.commandStr) == 0)
 		{
-			command->command = PWD;
+			command.command = PWD;
 		}
-		else if(strcmp("LIST", commandStr) == 0)
+		else if(strcmp("LIST", command.commandStr) == 0)
 		{
-			command->command = LIST;
+			command.command = LIST;
 		}
-		else if(strcmp("PORT", commandStr) == 0)
+		else if(strcmp("PORT", command.commandStr) == 0)
 		{
-			command->command = PORT;
+			command.command = PORT;
 		}
 	}
 	else
 	{
-		command->command = QUIT;
+		command.command = QUIT;
 	}
 
-	printf("command: %s, %s\n", commandStr, command->args);
+	printf("command: %s, %s\n", command.commandStr, command.args);
+
+	return command;
 }
 
 static void handle_user_command(FtpCommand* command, ClientConn* clientConn)
@@ -245,7 +248,7 @@ static void* client_conn_main(void* arg)
 
 	while(running)
 	{
-		 get_command(&command, clientConn);
+		command = get_command(clientConn);
 
 		switch(command.command)
 		{
