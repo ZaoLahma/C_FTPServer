@@ -17,9 +17,11 @@
 #define EXPECT(this, that) \
 if(this != that) \
 {\
+	printf("\n---- TEST FAILED ----\n");\
 	printf(#this " (0x%x) != " #that " (0x%x)\n", \
 		  (unsigned int)this, \
 		  (unsigned int)that);\
+	abort();\
 }\
 else\
 {\
@@ -93,6 +95,8 @@ void* ftp_test_func(void* arg)
 
 	int* running = (int*)arg;
 
+	int noOfBytesReceived = 0;
+
 	char receiveBuf[100] = "";
 
 	struct socket_client client;
@@ -102,19 +106,22 @@ void* ftp_test_func(void* arg)
 
 	int serverFd = client.connect("127.0.0.1", "3370");
 
-	client.conn.receive(serverFd, receiveBuf, 100);
+	noOfBytesReceived = client.conn.receive(serverFd, receiveBuf, 100);
+	receiveBuf[noOfBytesReceived] = '\0';
 
 	EXPECT(0, strcmp("220 OK\r\n", receiveBuf));
 
 	client.conn.send(serverFd, "USER janne\r\n", 12);
 
-	client.conn.receive(serverFd, receiveBuf, 100);
+	noOfBytesReceived = client.conn.receive(serverFd, receiveBuf, 100);
+	receiveBuf[noOfBytesReceived] = '\0';
 
 	EXPECT(0, strcmp("330 OK, send password\r\n", receiveBuf));
 
 	client.conn.send(serverFd, "PASS hihello\r\n", 14);
 
-	client.conn.receive(serverFd, receiveBuf, 100);
+	noOfBytesReceived = client.conn.receive(serverFd, receiveBuf, 100);
+	receiveBuf[noOfBytesReceived] = '\0';
 
 	EXPECT(0, strcmp("230 OK, user logged in\r\n", receiveBuf));
 
@@ -129,7 +136,8 @@ void* ftp_test_func(void* arg)
 
 	client.conn.send(serverFd, "PORT 127,0,0,1,179,148\r\n", 24);
 
-	client.conn.receive(serverFd, receiveBuf, 100);
+	noOfBytesReceived = client.conn.receive(serverFd, receiveBuf, 100);
+	receiveBuf[noOfBytesReceived] = '\0';
 
 	EXPECT(0, strcmp("200 PORT command successful\r\n", receiveBuf));
 
@@ -137,32 +145,32 @@ void* ftp_test_func(void* arg)
 
 	client.conn.send(serverFd, "LIST\r\n", 6);
 
-	/*
-	while(0 != client.conn.receive(*clientFd, receiveBuf, 100))
+	noOfBytesReceived = client.conn.receive(serverFd, receiveBuf, 100);
+	receiveBuf[noOfBytesReceived] = '\0';
+
+	EXPECT(0, strcmp("150 LIST executed ok, data follows\r\n", receiveBuf));
+
+	while((noOfBytesReceived = client.conn.receive(*clientFd, receiveBuf, 100)) == 0)
 	{
+		receiveBuf[noOfBytesReceived] = '\0';
 		printf("receiveBuf: %s\n", receiveBuf);
 	}
-	*/
 
 	client.conn.disconnect(*clientFd);
 
+	noOfBytesReceived = client.conn.receive(serverFd, receiveBuf, 100);
+
+	receiveBuf[noOfBytesReceived] = '\0';
+	printf("receiveBuf: %s\n", receiveBuf);
+
+	EXPECT(0, strcmp("226 LIST data send finished\r\n", receiveBuf));
+
 	client.conn.send(serverFd, "QUIT\r\n", 6);
 
-	client.conn.receive(serverFd, receiveBuf, 100);
+	noOfBytesReceived = client.conn.receive(serverFd, receiveBuf, 100);
+	receiveBuf[noOfBytesReceived] = '\0';
 
-	EXPECT(receiveBuf[0],  '2');
-	EXPECT(receiveBuf[1],  '2');
-	EXPECT(receiveBuf[2],  '1');
-	EXPECT(receiveBuf[3],  ' ');
-	EXPECT(receiveBuf[4],  'B');
-	EXPECT(receiveBuf[5],  'y');
-	EXPECT(receiveBuf[6],  'e');
-	EXPECT(receiveBuf[7],  ' ');
-	EXPECT(receiveBuf[8],  'B');
-	EXPECT(receiveBuf[9],  'y');
-	EXPECT(receiveBuf[10], 'e');
-	EXPECT(receiveBuf[11], '\r');
-	EXPECT(receiveBuf[12], '\n');
+	EXPECT(0, strcmp("221 Bye Bye\r\n", receiveBuf));
 
 	*running = 0;
 	serverFd = client.connect("127.0.0.1", "3370");
@@ -249,7 +257,9 @@ void test_ftp()
 
 int main(void)
 {
-	//test_framework();
+	test_framework();
 	test_ftp();
+
+	printf("\n---- TEST SUCCEEDED ----\n");
 	return 0;
 }

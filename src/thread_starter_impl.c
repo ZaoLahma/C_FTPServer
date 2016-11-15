@@ -120,6 +120,8 @@ static void execute_job_thread_pool_impl(void* (*thread_func)(void*), void* arg)
 
 	queue_execution(queueItem);
 
+	pthread_mutex_lock(&mutex);
+
 	struct PoolThreadFunc* thread = threads;
 	while(thread != 0)
 	{
@@ -129,6 +131,7 @@ static void execute_job_thread_pool_impl(void* (*thread_func)(void*), void* arg)
 			pthread_mutex_lock(&thread->mutex);
 			pthread_cond_signal(&thread->cond);
 			pthread_mutex_unlock(&thread->mutex);
+			pthread_mutex_unlock(&mutex);
 			return;
 		}
 		//printf("execute_job_thread_pool_impl leaving mutex\n");
@@ -161,6 +164,8 @@ static void execute_job_thread_pool_impl(void* (*thread_func)(void*), void* arg)
 		}
 		lastElem->next = thread;
 	}
+
+	pthread_mutex_unlock(&mutex);
 }
 
 //The API
