@@ -25,6 +25,8 @@ typedef struct ClientConn
 	int dataFd;
 	char userName[20];
 	char currDir[100];
+	unsigned char passivePort[2];
+	unsigned char ipAddr[4];
 	struct socket_server* server;
 } ClientConn;
 
@@ -259,20 +261,23 @@ static void handle_quit_command(ClientConn* clientConn)
 
 static void handle_pasv_command(ClientConn* clientConn)
 {
-	int serverFd = clientConn->server->get_server_socket_fd("2570");
+	int portNo = (clientConn->passivePort[0] << 8) + clientConn->passivePort[1];
+
+	char portNoStr[6] = "";
+	sprintf(portNoStr, "%d", portNo);
+
+	int serverFd = clientConn->server->get_server_socket_fd(portNoStr);
 
 	char sendBuf[100] = "";
-	unsigned char ipAddr[4] = {192, 168, 1, 189};
-	unsigned char portHigh = 10;
-	unsigned char portLow = 10;
 	sprintf(sendBuf,
 			"227 PASV (%d,%d,%d,%d,%d,%d)",
-			ipAddr[0],
-			ipAddr[1],
-			ipAddr[2],
-			ipAddr[3],
-			portHigh,
-			portLow);
+			clientConn->ipAddr[0],
+			clientConn->ipAddr[1],
+			clientConn->ipAddr[2],
+			clientConn->ipAddr[3],
+			clientConn->passivePort[0],
+			clientConn->passivePort[1]);
+
 	ftp_send(clientConn->controlFd, clientConn, sendBuf);
 	clientConn->dataFd = clientConn->server->wait_for_connection(serverFd);
 	clientConn->server->conn.disconnect(serverFd);
@@ -353,8 +358,12 @@ void run_ftp(int* running)
 
 		if(*running && -1 != clientSocketFd)
 		{
-			struct ClientConn* client = (struct ClientConn*)malloc(sizeof(struct ClientConn));
+			ClientConn* client = (ClientConn*)malloc(sizeof(struct ClientConn));
 			client->controlFd = clientSocketFd;
+			unsigned char ip[4] = {192, 168, 1, 189};
+			memcpy(client->ipAddr, ip, 4);
+			client->passivePort[0] = 10;
+			client->passivePort[1] = 10;
 			client->server = &server;
 			pthread_mutex_init(&client->mutex, 0);
 			pthread_cond_init(&client->cond, 0);
