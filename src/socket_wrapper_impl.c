@@ -11,13 +11,11 @@
 #include <arpa/inet.h>
 #include <netdb.h>
 #include <sys/types.h>
-
 #include <unistd.h>
 #include <string.h>
-
 #include <stdio.h>
-
 #include <errno.h>
+#include <sys/time.h>
 
 //----- Common -----
 static void disconnect(int socketFd)
@@ -97,13 +95,31 @@ static int get_server_socket_fd(char* portNo)
 
 static int wait_for_connection(int socketFd)
 {
+
+    struct timeval tv;
+    fd_set acceptFds;
+
+    // Wait at most 2.5 seconds for a client to connect
+    tv.tv_sec = 2;
+    tv.tv_usec = 500000;
+
 	struct sockaddr_storage their_addr;
     socklen_t sin_size;
 
 	sin_size = sizeof their_addr;
-	int new_fd = accept(socketFd, (struct sockaddr *)&their_addr, &sin_size);
 
-    return new_fd;
+    FD_ZERO(&acceptFds);
+    FD_SET(socketFd, &acceptFds);
+
+    select(socketFd + 1, &acceptFds, 0, 0, &tv);
+
+    if (FD_ISSET(socketFd, &acceptFds))
+    {
+    	return accept(socketFd, (struct sockaddr *)&their_addr, &sin_size);
+
+    }
+
+    return -1;
 }
 
 void init_server_socket(struct socket_server* socket)

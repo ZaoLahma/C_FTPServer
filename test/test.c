@@ -89,6 +89,35 @@ void* ftp_test_port_func(void* arg)
 	return 0;
 }
 
+static int run_list_command(int* serverFd, int* clientFd, socket_client* client)
+{
+	client->conn.send(*serverFd, "LIST\r\n", 6);
+
+	char receiveBuf[100] = "";
+	int noOfBytesReceived = client->conn.receive(*serverFd, receiveBuf, 100);
+	receiveBuf[noOfBytesReceived] = '\0';
+
+	EXPECT(0, strcmp("150 LIST executed ok, data follows\r\n", receiveBuf));
+
+	while((noOfBytesReceived = client->conn.receive(*clientFd, receiveBuf, 100)) == 0)
+	{
+		receiveBuf[noOfBytesReceived] = '\0';
+		printf("receiveBuf: %s\n", receiveBuf);
+	}
+
+	client->conn.disconnect(*clientFd);
+	*clientFd = 0xffffffff;
+
+	noOfBytesReceived = client->conn.receive(*serverFd, receiveBuf, 100);
+
+	receiveBuf[noOfBytesReceived] = '\0';
+	printf("receiveBuf: %s\n", receiveBuf);
+
+	EXPECT(0, strcmp("226 LIST data send finished\r\n", receiveBuf));
+
+	return 0;
+}
+
 void* ftp_test_func(void* arg)
 {
 	printf("arg: %p\n", arg);
@@ -139,32 +168,12 @@ void* ftp_test_func(void* arg)
 	noOfBytesReceived = client.conn.receive(serverFd, receiveBuf, 100);
 	receiveBuf[noOfBytesReceived] = '\0';
 
+	//------
 	EXPECT(0, strcmp("200 PORT command successful\r\n", receiveBuf));
 
 	EXPECT(1, (0xffffffff != (unsigned int)*clientFd));
 
-	client.conn.send(serverFd, "LIST\r\n", 6);
-
-	noOfBytesReceived = client.conn.receive(serverFd, receiveBuf, 100);
-	receiveBuf[noOfBytesReceived] = '\0';
-
-	EXPECT(0, strcmp("150 LIST executed ok, data follows\r\n", receiveBuf));
-
-	while((noOfBytesReceived = client.conn.receive(*clientFd, receiveBuf, 100)) == 0)
-	{
-		receiveBuf[noOfBytesReceived] = '\0';
-		printf("receiveBuf: %s\n", receiveBuf);
-	}
-
-	client.conn.disconnect(*clientFd);
-	*clientFd = 0xffffffff;
-
-	noOfBytesReceived = client.conn.receive(serverFd, receiveBuf, 100);
-
-	receiveBuf[noOfBytesReceived] = '\0';
-	printf("receiveBuf: %s\n", receiveBuf);
-
-	EXPECT(0, strcmp("226 LIST data send finished\r\n", receiveBuf));
+	EXPECT(0, run_list_command(&serverFd, clientFd, &client));
 
 	//------
 	client.conn.send(serverFd, "PASV\n\r", 6);
@@ -174,8 +183,19 @@ void* ftp_test_func(void* arg)
 	EXPECT(0, strcmp("227 PASV (192,168,1,189,10,10)\r\n", receiveBuf));
 
 	*clientFd = client.connect("192.168.1.189", "2570");
-	//------
 
+	EXPECT(0, run_list_command(&serverFd, clientFd, &client));
+
+	//------
+	client.conn.send(serverFd, "PASV\n\r", 6);
+
+	noOfBytesReceived = client.conn.receive(serverFd, receiveBuf, 100);
+	receiveBuf[noOfBytesReceived] = '\0';
+	EXPECT(0, strcmp("227 PASV (192,168,1,189,10,10)\r\n", receiveBuf));
+
+	printf("EXPECTING TIMEOUT IN 2.5 SECONDS\n");
+
+	//------
 	client.conn.send(serverFd, "QUIT\r\n", 6);
 
 	noOfBytesReceived = client.conn.receive(serverFd, receiveBuf, 100);

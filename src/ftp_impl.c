@@ -351,7 +351,7 @@ void run_ftp(int* running)
 	{
 		clientSocketFd = server.wait_for_connection(serverSocketFd);
 
-		if(*running)
+		if(*running && -1 != clientSocketFd)
 		{
 			struct ClientConn* client = (struct ClientConn*)malloc(sizeof(struct ClientConn));
 			client->controlFd = clientSocketFd;
