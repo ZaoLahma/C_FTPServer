@@ -15,9 +15,12 @@
 #include <sys/types.h>
 #include <dirent.h>
 #include <fcntl.h>
+#include <pthread.h>
 
 typedef struct ClientConn
 {
+	pthread_mutex_t mutex;
+	pthread_cond_t cond;
 	int controlFd;
 	int dataFd;
 	char userName[20];
@@ -36,7 +39,8 @@ typedef enum FTP_COMMAND
 	SYST,
 	PWD,
 	LIST,
-	PORT
+	PORT,
+	PASV
 } FTP_COMMAND;
 
 typedef struct FtpCommand
@@ -113,6 +117,10 @@ static FtpCommand get_command(ClientConn* clientConn)
 		{
 			command.command = PORT;
 		}
+		else if(strcmp("PASV", command.commandStr) == 0)
+		{
+			command.command = PASV;
+		}
 	}
 	else
 	{
@@ -181,10 +189,18 @@ static void exec_proc(ClientConn* clientConn, char* cmd)
 
 static void handle_list_command(FtpCommand* command, ClientConn* clientConn)
 {
-	ftp_send(clientConn->controlFd, clientConn, "150 LIST executed ok, data follows");
-	exec_proc(clientConn, "ls -l");
-	ftp_send(clientConn->controlFd, clientConn, "226 LIST data send finished");
-	clientConn->server->conn.disconnect(clientConn->dataFd);
+	if(-1 != clientConn->dataFd)
+	{
+		ftp_send(clientConn->controlFd, clientConn, "150 LIST executed ok, data follows");
+		exec_proc(clientConn, "ls -l");
+		ftp_send(clientConn->controlFd, clientConn, "226 LIST data send finished");
+		clientConn->server->conn.disconnect(clientConn->dataFd);
+		clientConn->dataFd = -1;
+	}
+	else
+	{
+		ftp_send(clientConn->controlFd, clientConn, "530 LIST not executed (run PORT or PASV first)");
+	}
 }
 
 static void handle_port_command(FtpCommand* command, ClientConn* clientConn)
@@ -226,12 +242,40 @@ static void handle_port_command(FtpCommand* command, ClientConn* clientConn)
 
 	printf("dataFd: %d\n", clientConn->dataFd);
 
-	ftp_send(clientConn->controlFd, clientConn, "200 PORT command successful");
+	if(-1 != clientConn->dataFd)
+	{
+		ftp_send(clientConn->controlFd, clientConn, "200 PORT command successful");
+	}
+	else
+	{
+		ftp_send(clientConn->controlFd, clientConn, "530 PORT command failed");
+	}
 }
 
 static void handle_quit_command(ClientConn* clientConn)
 {
 	ftp_send(clientConn->controlFd, clientConn, "221 Bye Bye");
+}
+
+static void handle_pasv_command(ClientConn* clientConn)
+{
+	int serverFd = clientConn->server->get_server_socket_fd("2570");
+
+	char sendBuf[100] = "";
+	unsigned char ipAddr[4] = {192, 168, 1, 189};
+	unsigned char portHigh = 10;
+	unsigned char portLow = 10;
+	sprintf(sendBuf,
+			"227 PASV (%d,%d,%d,%d,%d,%d)",
+			ipAddr[0],
+			ipAddr[1],
+			ipAddr[2],
+			ipAddr[3],
+			portHigh,
+			portLow);
+	ftp_send(clientConn->controlFd, clientConn, sendBuf);
+	clientConn->dataFd = clientConn->server->wait_for_connection(serverFd);
+	clientConn->server->conn.disconnect(serverFd);
 }
 
 static void* client_conn_main(void* arg)
@@ -274,6 +318,9 @@ static void* client_conn_main(void* arg)
 		case PORT:
 			handle_port_command(&command, clientConn);
 			break;
+		case PASV:
+			handle_pasv_command(clientConn);
+			break;
 		default:
 			ftp_send(clientConn->controlFd, clientConn, "500 - Not implemented");
 		}
@@ -309,6 +356,8 @@ void run_ftp(int* running)
 			struct ClientConn* client = (struct ClientConn*)malloc(sizeof(struct ClientConn));
 			client->controlFd = clientSocketFd;
 			client->server = &server;
+			pthread_mutex_init(&client->mutex, 0);
+			pthread_cond_init(&client->cond, 0);
 
 			thread.execute_function(&client_conn_main, client);
 		}

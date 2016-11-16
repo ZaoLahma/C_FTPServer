@@ -24,7 +24,7 @@ typedef struct socket_client
 typedef struct socket_server
 {
 	int (*get_server_socket_fd)(char* portNo);
-	int (*wait_for_connection)();
+	int (*wait_for_connection)(int serverFd);
 	struct socket_common conn;
 } socket_server;
 

@@ -15,6 +15,7 @@ static struct QueueItem* queue = 0;
 static pthread_mutex_t mutex;
 static struct PoolThreadFunc* threads;
 static int num_threads = 0;
+static int initialized = 0;
 
 //Detached thread impl
 static void execute_job_detached_thread_impl(void* (*thread_func)(void*), void* arg)
@@ -178,7 +179,10 @@ void init_thread_starter(struct ThreadStarter* threadStarter,
 		threadStarter->execute_function = &execute_job_detached_thread_impl;
 		break;
 	case POOL:
-		pthread_mutex_init(&mutex, 0);
+		if(0 == initialized)
+		{
+			pthread_mutex_init(&mutex, 0);
+		}
 		threadStarter->execute_function = &execute_job_thread_pool_impl;
 		break;
 	default:
