@@ -297,26 +297,32 @@ static void handle_cwd_command(FtpCommand* command, ClientConn* clientConn)
 	if(strstr(command->args, "..") != 0)
 	{
 		char* token;
-		char* argStr = strndup(clientConn->currDir, 100);
+		char* argStr = (char*)malloc(strlen(clientConn->currDir));
+		strncpy(argStr, clientConn->currDir, strlen(clientConn->currDir));
 		int noOfLevels = 0;
 		while((token = strsep(&argStr, "/")) != 0)
 		{
 			noOfLevels++;
 			printf("token: %s\n", token);
 		}
+		free(argStr);
+		argStr = (char*)malloc(strlen(clientConn->currDir));
 
-		argStr = strndup(clientConn->currDir, 100);
+		printf("clientConn->currDir: %s\n", clientConn->currDir);
+		strncpy(argStr, clientConn->currDir, strlen(clientConn->currDir));
 		memset(clientConn->currDir, 0, 100);
 		int i = 0;
-		for(i = 0; i < noOfLevels - 1; ++i)
+		for(i = 0; i < noOfLevels; ++i)
 		{
 			token = strsep(&argStr, "/");
-			if(strlen(token) != 0)
+			if(strlen(token) != 0 && i < noOfLevels - 1)
 			{
 				strncat(clientConn->currDir, "/", 100);
 				strncat(clientConn->currDir, token, 100);
 			}
 		}
+
+		free(argStr);
 	}
 	else
 	{
