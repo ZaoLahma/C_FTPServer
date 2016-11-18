@@ -292,8 +292,37 @@ static void handle_pasv_command(ClientConn* clientConn)
 
 static void handle_cwd_command(FtpCommand* command, ClientConn* clientConn)
 {
-	strncat(clientConn->currDir, "/", 100);
-	strncat(clientConn->currDir, command->args, 100);
+	printf("command->args: %s\n", command->args);
+
+	if(strstr(command->args, "..") != 0)
+	{
+		char* token;
+		char* argStr = strndup(clientConn->currDir, 100);
+		int noOfLevels = 0;
+		while((token = strsep(&argStr, "/")) != 0)
+		{
+			noOfLevels++;
+			printf("token: %s\n", token);
+		}
+
+		argStr = strndup(clientConn->currDir, 100);
+		memset(clientConn->currDir, 0, 100);
+		int i = 0;
+		for(i = 0; i < noOfLevels - 1; ++i)
+		{
+			token = strsep(&argStr, "/");
+			if(strlen(token) != 0)
+			{
+				strncat(clientConn->currDir, "/", 100);
+				strncat(clientConn->currDir, token, 100);
+			}
+		}
+	}
+	else
+	{
+		strncat(clientConn->currDir, "/", 100);
+		strncat(clientConn->currDir, command->args, 100);
+	}
 
 	printf("clientConn->currDir: %s\n", clientConn->currDir);
 	ftp_send(clientConn->controlFd, clientConn, "250 CWD OK");

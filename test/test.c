@@ -202,6 +202,12 @@ void* ftp_test_func(void* arg)
 	receiveBuf[noOfBytesReceived] = '\0';
 	EXPECT(0, strcmp("250 CWD OK\r\n", receiveBuf));
 
+	client.conn.send(serverFd, "CWD ..\n\r", 10);
+
+	noOfBytesReceived = client.conn.receive(serverFd, receiveBuf, 100);
+	receiveBuf[noOfBytesReceived] = '\0';
+	EXPECT(0, strcmp("250 CWD OK\r\n", receiveBuf));
+
 	//------
 	client.conn.send(serverFd, "QUIT\r\n", 6);
 
