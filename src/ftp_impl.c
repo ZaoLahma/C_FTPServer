@@ -42,7 +42,8 @@ typedef enum FTP_COMMAND
 	PWD,
 	LIST,
 	PORT,
-	PASV
+	PASV,
+	CWD
 } FTP_COMMAND;
 
 typedef struct FtpCommand
@@ -123,6 +124,10 @@ static FtpCommand get_command(ClientConn* clientConn)
 		{
 			command.command = PASV;
 		}
+		else if(strcmp("CWD", command.commandStr) == 0)
+		{
+			command.command = CWD;
+		}
 	}
 	else
 	{
@@ -145,7 +150,7 @@ static void handle_pass_command(FtpCommand* command, ClientConn* clientConn)
 	if((strcmp("hihello", command->args) == 0) &&
 	   (strcmp("janne", clientConn->userName) == 0))
 	{
-		strncpy(clientConn->currDir, "/", 100);
+		strncpy(clientConn->currDir, "/Users/janne", 100);
 		ftp_send(clientConn->controlFd, clientConn, "230 OK, user logged in");
 	}
 	else
@@ -194,7 +199,9 @@ static void handle_list_command(FtpCommand* command, ClientConn* clientConn)
 	if(-1 != clientConn->dataFd)
 	{
 		ftp_send(clientConn->controlFd, clientConn, "150 LIST executed ok, data follows");
-		exec_proc(clientConn, "ls -l");
+		char cmd[20] = "";
+		sprintf(cmd, "%s %s", "ls -l", clientConn->currDir);
+		exec_proc(clientConn, cmd);
 		ftp_send(clientConn->controlFd, clientConn, "226 LIST data send finished");
 		clientConn->server->conn.disconnect(clientConn->dataFd);
 		clientConn->dataFd = -1;
@@ -283,6 +290,15 @@ static void handle_pasv_command(ClientConn* clientConn)
 	clientConn->server->conn.disconnect(serverFd);
 }
 
+static void handle_cwd_command(FtpCommand* command, ClientConn* clientConn)
+{
+	strncat(clientConn->currDir, "/", 100);
+	strncat(clientConn->currDir, command->args, 100);
+
+	printf("clientConn->currDir: %s\n", clientConn->currDir);
+	ftp_send(clientConn->controlFd, clientConn, "250 CWD OK");
+}
+
 static void* client_conn_main(void* arg)
 {
 	ClientConn* clientConn = (ClientConn*)arg;
@@ -325,6 +341,9 @@ static void* client_conn_main(void* arg)
 			break;
 		case PASV:
 			handle_pasv_command(clientConn);
+			break;
+		case CWD:
+			handle_cwd_command(&command, clientConn);
 			break;
 		default:
 			ftp_send(clientConn->controlFd, clientConn, "500 - Not implemented");
