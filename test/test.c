@@ -294,7 +294,9 @@ void test_ftp()
 
 	threadStarter.execute_function(&ftp_test_func, running);
 
-	run_ftp(running);
+	unsigned char addr[4] = {127, 0, 0, 1};
+
+	run_ftp(running, addr, "3370");
 
 	free(running);
 }

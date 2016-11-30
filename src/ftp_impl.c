@@ -23,6 +23,7 @@ typedef struct ClientConn
 	pthread_cond_t cond;
 	int controlFd;
 	int dataFd;
+	char transferMode;
 	char userName[20];
 	char currDir[100];
 	unsigned char passivePort[2];
@@ -43,14 +44,14 @@ typedef enum FTP_COMMAND
 	LIST,
 	PORT,
 	PASV,
-	CWD
+	CWD,
+	TYPE
 } FTP_COMMAND;
 
 typedef struct FtpCommand
 {
 	FTP_COMMAND command;
 	char args[75];
-	char commandStr[20];
 } FtpCommand;
 
 static void ftp_send(int fd, ClientConn* clientConn, char* toSend)
@@ -84,6 +85,8 @@ static FtpCommand get_command(ClientConn* clientConn)
 	receiveBuf[noOfBytesReceived] = '\0';
 
 	printf("noOfBytesReceived: %d\n", noOfBytesReceived);
+	
+	char commandStr[20];
 
 	if(0 != noOfBytesReceived)
 	{
@@ -91,41 +94,41 @@ static FtpCommand get_command(ClientConn* clientConn)
 
 		printf("receiveBuf: %s (%d)\n", receiveBuf, (int)strlen(receiveBuf));
 
-		sscanf(receiveBuf, "%s %s", command.commandStr, command.args);
+		sscanf(receiveBuf, "%s %s", commandStr, command.args);
 
-		if(strcmp("USER", command.commandStr) == 0)
+		if(strcmp("USER", commandStr) == 0)
 		{
 			command.command = USER;
 		}
-		else if(strcmp("QUIT", command.commandStr) == 0)
+		else if(strcmp("QUIT", commandStr) == 0)
 		{
 			command.command = QUIT;
 		}
-		else if(strcmp("PASS", command.commandStr) == 0)
+		else if(strcmp("PASS", commandStr) == 0)
 		{
 			command.command = PASS;
 		}
-		else if(strcmp("SYST", command.commandStr) == 0)
+		else if(strcmp("SYST", commandStr) == 0)
 		{
 			command.command = SYST;
 		}
-		else if(strcmp("PWD", command.commandStr) == 0)
+		else if(strcmp("PWD", commandStr) == 0)
 		{
 			command.command = PWD;
 		}
-		else if(strcmp("LIST", command.commandStr) == 0)
+		else if(strcmp("LIST", commandStr) == 0)
 		{
 			command.command = LIST;
 		}
-		else if(strcmp("PORT", command.commandStr) == 0)
+		else if(strcmp("PORT", commandStr) == 0)
 		{
 			command.command = PORT;
 		}
-		else if(strcmp("PASV", command.commandStr) == 0)
+		else if(strcmp("PASV", commandStr) == 0)
 		{
 			command.command = PASV;
 		}
-		else if(strcmp("CWD", command.commandStr) == 0)
+		else if(strcmp("CWD", commandStr) == 0)
 		{
 			command.command = CWD;
 		}
@@ -135,7 +138,7 @@ static FtpCommand get_command(ClientConn* clientConn)
 		command.command = QUIT;
 	}
 
-	printf("command: %s, %s\n", command.commandStr, command.args);
+	printf("command: %s, %s\n", commandStr, command.args);
 
 	return command;
 }
@@ -151,7 +154,7 @@ static void handle_pass_command(FtpCommand* command, ClientConn* clientConn)
 	if((strcmp("hihello", command->args) == 0) &&
 	   (strcmp("janne", clientConn->userName) == 0))
 	{
-		strncpy(clientConn->currDir, "/Users/janne", 100);
+		strncpy(clientConn->currDir, "/home/janne", 100);
 		ftp_send(clientConn->controlFd, clientConn, "230 OK, user logged in");
 	}
 	else
@@ -169,6 +172,7 @@ static void handle_pwd_command(ClientConn* clientConn)
 {
 	const unsigned int SEND_BUF_SIZE = 200;
 	char sendBuf[SEND_BUF_SIZE];
+	memset(sendBuf, 0, SEND_BUF_SIZE);
 	strncat(sendBuf, "257 \"", SEND_BUF_SIZE);
 	strncat(sendBuf, clientConn->currDir, SEND_BUF_SIZE);
 	strncat(sendBuf, "\"", SEND_BUF_SIZE);
@@ -185,8 +189,12 @@ static void exec_proc(ClientConn* clientConn, char* cmd)
 	while (!feof(file)) {
 		if (fgets(buffer, 4096, file) != 0) {
 			int lineLength = strlen(buffer);
-			buffer[lineLength - 1] = '\r';
-			buffer[lineLength]     = '\n';
+			if('A' == clientConn->transferMode)
+			{
+				printf("ASCII mode\n");
+				buffer[lineLength - 1] = '\r';
+				buffer[lineLength]     = '\n';
+			}
 			ftp_send(clientConn->dataFd, clientConn, buffer);
 			memset(buffer, 0, 4096);
 		}
@@ -395,13 +403,13 @@ static void* client_conn_main(void* arg)
 	return 0;
 }
 
-void run_ftp(int* running)
+void run_ftp(int* running, unsigned char* addr, char* port)
 {
 	printf("FTP server starting, running: %d\n", *running);
 	struct socket_server server;
 	init_server_socket(&server);
 
-	int serverSocketFd = server.get_server_socket_fd("3370");
+	int serverSocketFd = server.get_server_socket_fd(port);
 	int clientSocketFd = -1;
 
 	ThreadStarter thread;
@@ -415,10 +423,10 @@ void run_ftp(int* running)
 		{
 			ClientConn* client = (ClientConn*)malloc(sizeof(struct ClientConn));
 			client->controlFd = clientSocketFd;
-			unsigned char ip[4] = {127, 0, 0, 1};
-			memcpy(client->ipAddr, ip, 4);
+			memcpy(client->ipAddr, addr, 4);
 			client->passivePort[0] = 10;
 			client->passivePort[1] = 10;
+			client->transferMode = 'A';
 			client->server = &server;
 			pthread_mutex_init(&client->mutex, 0);
 			pthread_cond_init(&client->cond, 0);
