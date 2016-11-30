@@ -414,7 +414,7 @@ void run_ftp(int* running)
 		{
 			ClientConn* client = (ClientConn*)malloc(sizeof(struct ClientConn));
 			client->controlFd = clientSocketFd;
-			unsigned char ip[4] = {192, 168, 1, 189};
+			unsigned char ip[4] = {127, 0, 0, 1};
 			memcpy(client->ipAddr, ip, 4);
 			client->passivePort[0] = 10;
 			client->passivePort[1] = 10;
