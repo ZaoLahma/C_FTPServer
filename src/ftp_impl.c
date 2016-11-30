@@ -55,12 +55,13 @@ typedef struct FtpCommand
 
 static void ftp_send(int fd, ClientConn* clientConn, char* toSend)
 {
-	const unsigned int SEND_BUF_SIZE = strlen(toSend) + 2;
+	const unsigned int SEND_BUF_SIZE = strlen(toSend) + 3;
 	char sendBuf[SEND_BUF_SIZE];
 	memset(sendBuf, 0, SEND_BUF_SIZE);
 	strncpy(sendBuf, toSend, SEND_BUF_SIZE);
-	sendBuf[SEND_BUF_SIZE - 2] = '\r';
-	sendBuf[SEND_BUF_SIZE - 1] = '\n';
+	sendBuf[SEND_BUF_SIZE - 3] = '\r';
+	sendBuf[SEND_BUF_SIZE - 2] = '\n';
+	sendBuf[SEND_BUF_SIZE - 1] = '\0';
 
 	printf("ftp_send sending: %s on file descriptor: %d\n", sendBuf, fd);
 
@@ -170,7 +171,7 @@ static void handle_pwd_command(ClientConn* clientConn)
 	char sendBuf[SEND_BUF_SIZE];
 	strncat(sendBuf, "257 \"", SEND_BUF_SIZE);
 	strncat(sendBuf, clientConn->currDir, SEND_BUF_SIZE);
-	strncat(sendBuf, "\"\r\n", SEND_BUF_SIZE);
+	strncat(sendBuf, "\"", SEND_BUF_SIZE);
 
 	ftp_send(clientConn->controlFd, clientConn, sendBuf);
 }
