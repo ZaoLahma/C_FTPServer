@@ -19,8 +19,6 @@
 
 typedef struct ClientConn
 {
-	pthread_mutex_t mutex;
-	pthread_cond_t cond;
 	int controlFd;
 	int dataFd;
 	char transferMode;
@@ -136,13 +134,13 @@ static FtpCommand get_command(ClientConn* clientConn)
 		{
 			command.command = TYPE;
 		}
+
+        printf("command: %s, %s\n", commandStr, command.args);
 	}
 	else
 	{
 		command.command = QUIT;
 	}
-
-	printf("command: %s, %s\n", commandStr, command.args);
 
 	return command;
 }
@@ -462,8 +460,6 @@ void run_ftp(int* running, unsigned char* addr, char* port)
 			client->passivePort[1] = 10;
 			client->transferMode = 'A';
 			client->server = &server;
-			pthread_mutex_init(&client->mutex, 0);
-			pthread_cond_init(&client->cond, 0);
 
 			thread.execute_function(&client_conn_main, client);
 		}
