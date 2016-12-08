@@ -76,7 +76,7 @@ static FtpCommand get_command(ClientConn* clientConn)
 
 	char receiveBuf[REC_BUF_SIZE] = "";
 
-	FtpCommand command = {UNKNOWN, "", ""};
+	FtpCommand command = {UNKNOWN, ""};
 
 	int noOfBytesReceived = clientConn->server->conn.receive(clientConn->controlFd,
 							receiveBuf,
@@ -131,6 +131,10 @@ static FtpCommand get_command(ClientConn* clientConn)
 		else if(strcmp("CWD", commandStr) == 0)
 		{
 			command.command = CWD;
+		}
+		else if(strcmp("TYPE", commandStr) == 0)
+		{
+			command.command = TYPE;
 		}
 	}
 	else
@@ -189,9 +193,9 @@ static void exec_proc(ClientConn* clientConn, char* cmd)
 	while (!feof(file)) {
 		if (fgets(buffer, 4096, file) != 0) {
 			int lineLength = strlen(buffer);
-			if('A' == clientConn->transferMode)
+			printf("exec_proc transferMode: %c\n", clientConn->transferMode);
+			if(clientConn->transferMode == 'A')
 			{
-				printf("ASCII mode\n");
 				buffer[lineLength - 1] = '\r';
 				buffer[lineLength]     = '\n';
 			}
@@ -286,7 +290,7 @@ static void handle_pasv_command(ClientConn* clientConn)
 
 	char sendBuf[100] = "";
 	sprintf(sendBuf,
-			"227 PASV (%d,%d,%d,%d,%d,%d)",
+			"227 =%d,%d,%d,%d,%d,%d",
 			clientConn->ipAddr[0],
 			clientConn->ipAddr[1],
 			clientConn->ipAddr[2],
@@ -343,6 +347,29 @@ static void handle_cwd_command(FtpCommand* command, ClientConn* clientConn)
 	ftp_send(clientConn->controlFd, clientConn, "250 CWD OK");
 }
 
+static void handle_type_command(FtpCommand* command, ClientConn* clientConn)
+{
+	printf("command->args: %s\n", command->args);
+	
+	printf("clientConn->transferMode before type command: %c\n", clientConn->transferMode);
+	
+	if(strcmp("A", command->args) == 0)
+	{
+		clientConn->transferMode = 'A';
+		ftp_send(clientConn->controlFd, clientConn, "200 TYPE changed to A");
+	}
+	else if(strcmp("I", command->args) == 0)
+	{
+		clientConn->transferMode = 'I';
+		ftp_send(clientConn->controlFd, clientConn, "200 TYPE change to I");
+	}
+	else
+	{
+		ftp_send(clientConn->controlFd, clientConn, "501 not implemented");
+	}
+}
+
+
 static void* client_conn_main(void* arg)
 {
 	ClientConn* clientConn = (ClientConn*)arg;
@@ -358,6 +385,8 @@ static void* client_conn_main(void* arg)
 	while(running)
 	{
 		command = get_command(clientConn);
+		
+		printf("clientConn->transferMode in main loop: %c\n", clientConn->transferMode);
 
 		switch(command.command)
 		{
@@ -388,6 +417,10 @@ static void* client_conn_main(void* arg)
 			break;
 		case CWD:
 			handle_cwd_command(&command, clientConn);
+			break;
+		case TYPE:
+			handle_type_command(&command, clientConn);
+			printf("clientConn->transferMode after type command: %c\n", clientConn->transferMode);
 			break;
 		default:
 			ftp_send(clientConn->controlFd, clientConn, "500 - Not implemented");
