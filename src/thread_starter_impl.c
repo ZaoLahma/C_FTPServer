@@ -146,6 +146,8 @@ static void execute_job_thread_pool_impl(void* (*thread_func)(void*), void* arg)
 	printf("num_threads: %d\n", num_threads);
 
 	thread = (struct PoolThreadFunc*)malloc(sizeof(struct PoolThreadFunc));
+	thread->busy = 0;
+	thread->next = 0;
 	pthread_mutex_init(&thread->mutex, 0);
 	pthread_cond_init(&thread->cond, 0);
 	pthread_create(&thread->thread, 0, &pool_thread_func, thread);
@@ -179,9 +181,10 @@ void init_thread_starter(struct ThreadStarter* threadStarter,
 		threadStarter->execute_function = &execute_job_detached_thread_impl;
 		break;
 	case POOL:
-		if(0 == initialized)
-		{
-			pthread_mutex_init(&mutex, 0);
+        if(0 == initialized)
+        {
+            initialized = 1;
+            pthread_mutex_init(&mutex, 0);
 		}
 		threadStarter->execute_function = &execute_job_thread_pool_impl;
 		break;
