@@ -18,8 +18,9 @@
 if(this != that) \
 {\
 	printf("\n---- TEST FAILED ----\n");\
+	printf("File: %s, line: %d\n", __FILE__, __LINE__);\
 	printf(#this " (0x%x) != " #that " (0x%x)\n", \
-		  (unsigned int)this, \
+		  (unsigned int)this,\
 		  (unsigned int)that);\
 	abort();\
 }\
@@ -85,6 +86,8 @@ void* ftp_test_port_func(void* arg)
 	printf("Waiting for connection\n");
 
 	*clientFd = server.wait_for_connection(serverFd);
+
+	printf("Test case received connection. clientFd: %d\n", *clientFd);
 
 	return 0;
 }

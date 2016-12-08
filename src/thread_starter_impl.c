@@ -104,8 +104,8 @@ static void* pool_thread_func(void* arg)
 		//printf("thread_func waiting for cond\n");
 		pthread_cond_wait(&poolThreadFunc->cond,
 						  &poolThreadFunc->mutex);
-		pthread_mutex_unlock(&poolThreadFunc->mutex);
 		poolThreadFunc->busy = 1;
+		pthread_mutex_unlock(&poolThreadFunc->mutex);
 	}
 
 	return 0;

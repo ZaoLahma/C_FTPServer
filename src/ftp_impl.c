@@ -85,7 +85,7 @@ static FtpCommand get_command(ClientConn* clientConn)
 	receiveBuf[noOfBytesReceived] = '\0';
 
 	printf("noOfBytesReceived: %d\n", noOfBytesReceived);
-	
+
 	char commandStr[20];
 
 	if(0 != noOfBytesReceived)
@@ -290,7 +290,7 @@ static void handle_pasv_command(ClientConn* clientConn)
 
 	char sendBuf[100] = "";
 	sprintf(sendBuf,
-			"227 =%d,%d,%d,%d,%d,%d",
+			"227 PASV (%d,%d,%d,%d,%d,%d)",
 			clientConn->ipAddr[0],
 			clientConn->ipAddr[1],
 			clientConn->ipAddr[2],
@@ -350,9 +350,9 @@ static void handle_cwd_command(FtpCommand* command, ClientConn* clientConn)
 static void handle_type_command(FtpCommand* command, ClientConn* clientConn)
 {
 	printf("command->args: %s\n", command->args);
-	
+
 	printf("clientConn->transferMode before type command: %c\n", clientConn->transferMode);
-	
+
 	if(strcmp("A", command->args) == 0)
 	{
 		clientConn->transferMode = 'A';
@@ -385,7 +385,7 @@ static void* client_conn_main(void* arg)
 	while(running)
 	{
 		command = get_command(clientConn);
-		
+
 		printf("clientConn->transferMode in main loop: %c\n", clientConn->transferMode);
 
 		switch(command.command)
