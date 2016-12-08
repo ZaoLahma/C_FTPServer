@@ -31,7 +31,25 @@
 		<Compiler>
 			<Add option="-Wall" />
 		</Compiler>
-		<Unit filename="main.c">
+		<Unit filename="ftp_server" />
+		<Unit filename="inc/ftp_impl.h" />
+		<Unit filename="inc/socket_wrapper.h" />
+		<Unit filename="inc/socket_wrapper_impl.h" />
+		<Unit filename="inc/thread_starter.h" />
+		<Unit filename="inc/thread_starter_impl.h" />
+		<Unit filename="src/ftp_impl.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="src/main/main.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="src/socket_wrapper_impl.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="src/thread_starter_impl.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="test/test.c">
 			<Option compilerVar="CC" />
 		</Unit>
 		<Extensions>

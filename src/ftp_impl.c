@@ -66,7 +66,7 @@ static void ftp_send(int fd, ClientConn* clientConn, char* toSend)
 
 	printf("ftp_send sending: %s on file descriptor: %d\n", sendBuf, fd);
 
-	int noOfBytesSent = clientConn->server->conn.send(fd, sendBuf, SEND_BUF_SIZE);
+	int noOfBytesSent = clientConn->server->conn.send(fd, sendBuf, SEND_BUF_SIZE - 1);
 
 	printf("ftp_send sent %d no of bytes\n", noOfBytesSent);
 }
@@ -289,8 +289,9 @@ static void handle_pasv_command(ClientConn* clientConn)
 	int serverFd = clientConn->server->get_server_socket_fd(portNoStr);
 
 	char sendBuf[100] = "";
+	memset(sendBuf, 0, 100);
 	sprintf(sendBuf,
-			"227 PASV (%d,%d,%d,%d,%d,%d)",
+			"227 PASV (addr:%d,%d,%d,%d,%d,%d)",
 			clientConn->ipAddr[0],
 			clientConn->ipAddr[1],
 			clientConn->ipAddr[2],
