@@ -1,5 +1,5 @@
 CCOMMAND = gcc
-CFLAGS = -Wall -c -Wextra -g
+CFLAGS = -Wall -c -Wextra -g #-fno-stack-protector
 LINKARGS = -lpthread
 SOURCES = $(wildcard src/*.c)
 RELEASE_SOURCES = $(wildcard src/main/*.c)

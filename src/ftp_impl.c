@@ -24,6 +24,7 @@ typedef struct ClientConn
 	char transferMode;
 	char userName[20];
 	char currDir[100];
+	char ftpRootDir[25];
 	unsigned char passivePort[2];
 	unsigned char ipAddr[4];
 	struct socket_server* server;
@@ -156,7 +157,7 @@ static void handle_pass_command(FtpCommand* command, ClientConn* clientConn)
 	if((strcmp("hihello", command->args) == 0) &&
 	   (strcmp("janne", clientConn->userName) == 0))
 	{
-		strncpy(clientConn->currDir, "/home/janne", 100);
+		strncpy(clientConn->currDir, clientConn->ftpRootDir, 100);
 		ftp_send(clientConn->controlFd, clientConn, "230 OK, user logged in");
 	}
 	else
@@ -207,11 +208,12 @@ static void exec_proc(ClientConn* clientConn, char* cmd)
 
 static void handle_list_command(FtpCommand* command, ClientConn* clientConn)
 {
+    printf("Currdir in list: %s\n", clientConn->currDir);
 	if(-1 != clientConn->dataFd)
 	{
 		ftp_send(clientConn->controlFd, clientConn, "150 LIST executed ok, data follows");
-		char cmd[20] = "";
-		sprintf(cmd, "%s %s", "ls -l", clientConn->currDir);
+		char cmd[256] = "";
+		sprintf(cmd, "%s %s %s", "ls -l", clientConn->currDir, "| tail -n+2");
 		exec_proc(clientConn, cmd);
 		ftp_send(clientConn->controlFd, clientConn, "226 LIST data send finished");
 		clientConn->server->conn.disconnect(clientConn->dataFd);
@@ -308,33 +310,41 @@ static void handle_cwd_command(FtpCommand* command, ClientConn* clientConn)
 
 	if(strstr(command->args, "..") != 0)
 	{
-		char* token;
-		char* argStr = (char*)malloc(strlen(clientConn->currDir));
-		strncpy(argStr, clientConn->currDir, strlen(clientConn->currDir));
-		int noOfLevels = 0;
-		while((token = strsep(&argStr, "/")) != 0)
-		{
-			noOfLevels++;
-			printf("token: %s\n", token);
-		}
-		free(argStr);
-		argStr = (char*)malloc(strlen(clientConn->currDir));
+        if(strstr(command->args, clientConn->ftpRootDir) == 0)
+        {
+            char* token;
+            char* argStr = (char*)malloc(strlen(clientConn->currDir));
+            strncpy(argStr, clientConn->currDir, strlen(clientConn->currDir));
+            int noOfLevels = 0;
+            while((token = strsep(&argStr, "/")) != 0)
+            {
+                noOfLevels++;
+                printf("token: %s\n", token);
+            }
+            free(argStr);
+            argStr = (char*)malloc(strlen(clientConn->currDir));
 
-		printf("clientConn->currDir: %s\n", clientConn->currDir);
-		strncpy(argStr, clientConn->currDir, strlen(clientConn->currDir));
-		memset(clientConn->currDir, 0, 100);
-		int i = 0;
-		for(i = 0; i < noOfLevels; ++i)
-		{
-			token = strsep(&argStr, "/");
-			if(strlen(token) != 0 && i < noOfLevels - 1)
-			{
-				strncat(clientConn->currDir, "/", 100);
-				strncat(clientConn->currDir, token, 100);
-			}
-		}
+            printf("clientConn->currDir: %s\n", clientConn->currDir);
+            strncpy(argStr, clientConn->currDir, strlen(clientConn->currDir));
+            memset(clientConn->currDir, 0, 100);
+            int i = 0;
+            for(i = 0; i < noOfLevels; ++i)
+            {
+                token = strsep(&argStr, "/");
+                if(strlen(token) != 0 && i < noOfLevels - 1)
+                {
+                    strncat(clientConn->currDir, "/", 100);
+                    strncat(clientConn->currDir, token, 100);
+                }
+            }
 
-		free(argStr);
+            free(argStr);
+		}
+		else
+		{
+            printf("Client sends full path\n");
+            strncpy(clientConn->currDir, command->args, 100);
+		}
 	}
 	else
 	{
@@ -458,6 +468,7 @@ void run_ftp(int* running, unsigned char* addr, char* port)
 			memcpy(client->ipAddr, addr, 4);
 			client->passivePort[0] = 10;
 			client->passivePort[1] = 10;
+			strncpy(client->ftpRootDir, "/home/janne", 25);
 			client->transferMode = 'A';
 			client->server = &server;
 
