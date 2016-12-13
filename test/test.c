@@ -74,31 +74,6 @@ void* connect_func(void* arg)
 }
 
 #define TEST_PORT_NO "45972"
-static pthread_mutex_t portMutex;
-static pthread_cond_t portCond;
-void* ftp_test_port_func(void* arg)
-{
-	struct socket_server server;
-	init_server_socket(&server);
-
-	int serverFd = server.get_server_socket_fd(TEST_PORT_NO);
-
-	int* clientFd = (int*)arg;
-
-    pthread_mutex_lock(&portMutex);
-    *clientFd = -1;
-    while(*clientFd == -1)
-    {
-        printf("Test case waiting for connection\n");
-        *clientFd = server.wait_for_connection(serverFd);
-	}
-	pthread_cond_signal(&portCond);
-	pthread_mutex_unlock(&portMutex);
-
-	printf("Test case received connection. clientFd: %d\n", *clientFd);
-
-	return 0;
-}
 
 static int run_list_command(int* serverFd, int* clientFd, socket_client* client)
 {
@@ -165,21 +140,18 @@ void* ftp_test_func(void* arg)
 
 	EXPECT(0, strcmp("230 OK, user logged in\r\n", receiveBuf));
 
-	struct ThreadStarter threadStarter;
-	init_thread_starter(&threadStarter, DETACHED);
+	int clientFd = 0xffffffff;
 
-	int* clientFd = (int*)malloc(sizeof(int));
-	*clientFd = 0xffffffff;
+	struct socket_server server;
+	init_server_socket(&server);
 
-	threadStarter.execute_function(&ftp_test_port_func, clientFd);
-
-    pthread_mutex_lock(&portMutex);
-    sleep(1);
+	int portServerFd = server.get_server_socket_fd(TEST_PORT_NO);
 
 	client.conn.send(serverFd, "PORT 127,0,0,1,179,148\r\n", 24);
 
-    pthread_cond_wait(&portCond, &portMutex); //Wait for ftp_test_port_func to have received a connection
-    pthread_mutex_unlock(&portMutex);
+    printf("Test case waiting for connection\n");
+    clientFd = server.wait_for_connection(portServerFd);
+	printf("Test case received connection. clientFd: %d\n", clientFd);
 
 	noOfBytesReceived = client.conn.receive(serverFd, receiveBuf, 100);
 	receiveBuf[noOfBytesReceived] = '\0';
@@ -187,9 +159,9 @@ void* ftp_test_func(void* arg)
 	//------
 	EXPECT(0, strcmp("200 PORT command successful\r\n", receiveBuf));
 
-	EXPECT(1, (0xffffffff != (unsigned int)*clientFd));
+	EXPECT(1, (0xffffffff != (unsigned int)clientFd));
 
-	EXPECT(0, run_list_command(&serverFd, clientFd, &client));
+	EXPECT(0, run_list_command(&serverFd, &clientFd, &client));
 
 	//------
 	client.conn.send(serverFd, "PASV\r\n", 6);
@@ -198,9 +170,9 @@ void* ftp_test_func(void* arg)
 	receiveBuf[noOfBytesReceived] = '\0';
 	EXPECT(0, strcmp("227 PASV (addr:127,0,0,1,10,10)\r\n", receiveBuf));
 
-	*clientFd = client.connect("127.0.0.1", "2570");
+	clientFd = client.connect("127.0.0.1", "2570");
 
-	EXPECT(0, run_list_command(&serverFd, clientFd, &client));
+	EXPECT(0, run_list_command(&serverFd, &clientFd, &client));
 
 	//------
 	client.conn.send(serverFd, "PASV\r\n", 6);
@@ -302,9 +274,6 @@ void test_framework()
 
 void test_ftp()
 {
-    pthread_mutex_init(&portMutex, 0);
-    pthread_cond_init(&portCond, 0);
-
 	struct ThreadStarter threadStarter;
 	init_thread_starter(&threadStarter, DETACHED);
 
