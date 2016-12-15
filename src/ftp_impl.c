@@ -28,6 +28,7 @@ typedef struct ClientConn
 	unsigned char passivePort[2];
 	unsigned char ipAddr[4];
 	struct socket_server* server;
+	ThreadStarter* threadStarter;
 } ClientConn;
 
 #define REC_BUF_SIZE 1024
@@ -44,7 +45,8 @@ typedef enum FTP_COMMAND
 	PORT,
 	PASV,
 	CWD,
-	TYPE
+	TYPE,
+	RETR
 } FTP_COMMAND;
 
 typedef struct FtpCommand
@@ -135,6 +137,10 @@ static FtpCommand get_command(ClientConn* clientConn)
 		{
 			command.command = TYPE;
 		}
+		else if(strcmp("RETR", commandStr) == 0)
+		{
+            command.command = RETR;
+		}
 
         printf("command: %s, %s\n", commandStr, command.args);
 	}
@@ -189,8 +195,10 @@ static void exec_proc(ClientConn* clientConn, char* cmd)
 
 	FILE* file = popen(cmd, "r");
 
-	while (!feof(file)) {
-		if (fgets(buffer, 4096, file) != 0) {
+	while (!feof(file))
+	{
+		if (fgets(buffer, 4096, file) != 0)
+		{
 			int lineLength = strlen(buffer);
 			printf("exec_proc transferMode: %c\n", clientConn->transferMode);
 			if(clientConn->transferMode == 'A')
@@ -378,6 +386,61 @@ static void handle_type_command(FtpCommand* command, ClientConn* clientConn)
 	}
 }
 
+typedef struct FileTransferData
+{
+    char filePath[256];
+    ClientConn* clientConn;
+} FileTransferData;
+
+static void* file_transfer_func(void* arg)
+{
+
+    FileTransferData* ftData = (FileTransferData*)arg;
+    FILE* file = fopen(ftData->filePath, "r");
+
+    const unsigned int BUF_SIZE = 1024;
+    char buf[BUF_SIZE];
+    memset(buf, 0, BUF_SIZE);
+    int bytesRead = 0;
+
+    if(file)
+    {
+        ftp_send(ftData->clientConn->controlFd, ftData->clientConn, "150 RETR OK, data follows");
+
+        while((bytesRead = fgets(buf, BUF_SIZE, file)))
+        {
+            if('A'  == ftData->clientConn->transferMode &&
+               '\n' == buf[bytesRead])
+            {
+                buf[bytesRead - 1] = '\r';
+                buf[bytesRead] = '\n';
+                bytesRead++;
+            }
+            ftData->clientConn->server->conn.send(ftData->clientConn->dataFd, buf, bytesRead);
+        }
+
+        ftData->clientConn->server->conn.disconnect(ftData->clientConn->dataFd);
+        ftp_send(ftData->clientConn->controlFd, ftData->clientConn, "226 RETR FINISHED");
+    }
+    else
+    {
+        ftData->clientConn->server->conn.disconnect(ftData->clientConn->dataFd);
+        ftp_send(ftData->clientConn->controlFd, ftData->clientConn, "451 RETR FAILED");
+    }
+
+    free(ftData);
+
+    return 0;
+}
+
+static void handle_retr_command(FtpCommand* command, ClientConn* clientConn)
+{
+    FileTransferData* ftData = (FileTransferData*)malloc(sizeof(FileTransferData));
+    snprintf(ftData->filePath, 256, "%s/%s", clientConn->currDir, command->args);
+    printf("filePath: %s\n", ftData->filePath);
+    ftData->clientConn = clientConn;
+    clientConn->threadStarter->execute_function(&file_transfer_func, ftData);
+}
 
 static void* client_conn_main(void* arg)
 {
@@ -431,6 +494,9 @@ static void* client_conn_main(void* arg)
 			handle_type_command(&command, clientConn);
 			printf("clientConn->transferMode after type command: %c\n", clientConn->transferMode);
 			break;
+        case RETR:
+            handle_retr_command(&command, clientConn);
+            break;
 		default:
 			ftp_send(clientConn->controlFd, clientConn, "500 - Not implemented");
 		}
@@ -471,6 +537,7 @@ void run_ftp(int* running, unsigned char* addr, char* port)
 			strncpy(client->ftpRootDir, "/home/janne", 25);
 			client->transferMode = 'A';
 			client->server = &server;
+			client->threadStarter = &thread;
 
 			thread.execute_function(&client_conn_main, client);
 		}
