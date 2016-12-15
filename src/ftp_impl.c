@@ -401,19 +401,19 @@ static void* file_transfer_func(void* arg)
     const unsigned int BUF_SIZE = 1024;
     char buf[BUF_SIZE];
     memset(buf, 0, BUF_SIZE);
-    int bytesRead = 0;
 
     if(file)
     {
         ftp_send(ftData->clientConn->controlFd, ftData->clientConn, "150 RETR OK, data follows");
 
-        while((bytesRead = fgets(buf, BUF_SIZE, file)))
+        while(fgets(buf, BUF_SIZE, file))
         {
+            int bytesRead = strlen(buf);
             if('A'  == ftData->clientConn->transferMode &&
-               '\n' == buf[bytesRead])
+               '\n' == buf[strlen(buf) - 1])
             {
                 buf[bytesRead - 1] = '\r';
-                buf[bytesRead] = '\n';
+                buf[bytesRead]     = '\n';
                 bytesRead++;
             }
             ftData->clientConn->server->conn.send(ftData->clientConn->dataFd, buf, bytesRead);
@@ -458,8 +458,6 @@ static void* client_conn_main(void* arg)
 	{
 		command = get_command(clientConn);
 
-		printf("clientConn->transferMode in main loop: %c\n", clientConn->transferMode);
-
 		switch(command.command)
 		{
 		case USER:
@@ -492,7 +490,6 @@ static void* client_conn_main(void* arg)
 			break;
 		case TYPE:
 			handle_type_command(&command, clientConn);
-			printf("clientConn->transferMode after type command: %c\n", clientConn->transferMode);
 			break;
         case RETR:
             handle_retr_command(&command, clientConn);
