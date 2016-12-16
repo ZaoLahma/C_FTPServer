@@ -46,7 +46,8 @@ typedef enum FTP_COMMAND
 	PASV,
 	CWD,
 	TYPE,
-	RETR
+	RETR,
+	STOR
 } FTP_COMMAND;
 
 typedef struct FtpCommand
@@ -140,6 +141,10 @@ static FtpCommand get_command(ClientConn* clientConn)
 		else if(strcmp("RETR", commandStr) == 0)
 		{
             command.command = RETR;
+		}
+		else if(strcmp("STOR", commandStr) == 0)
+		{
+            command.command = STOR;
 		}
 
         printf("command: %s, %s\n", commandStr, command.args);
@@ -392,9 +397,8 @@ typedef struct FileTransferData
     ClientConn* clientConn;
 } FileTransferData;
 
-static void* file_transfer_func(void* arg)
+static void* file_retr_func(void* arg)
 {
-
     FileTransferData* ftData = (FileTransferData*)arg;
     FILE* file = fopen(ftData->filePath, "r");
 
@@ -419,6 +423,8 @@ static void* file_transfer_func(void* arg)
             ftData->clientConn->server->conn.send(ftData->clientConn->dataFd, buf, bytesRead);
         }
 
+        fclose(file);
+
         ftData->clientConn->server->conn.disconnect(ftData->clientConn->dataFd);
         ftp_send(ftData->clientConn->controlFd, ftData->clientConn, "226 RETR FINISHED");
     }
@@ -439,7 +445,44 @@ static void handle_retr_command(FtpCommand* command, ClientConn* clientConn)
     snprintf(ftData->filePath, 256, "%s/%s", clientConn->currDir, command->args);
     printf("filePath: %s\n", ftData->filePath);
     ftData->clientConn = clientConn;
-    clientConn->threadStarter->execute_function(&file_transfer_func, ftData);
+    clientConn->threadStarter->execute_function(&file_retr_func, ftData);
+}
+
+static void* file_stor_func(void* arg)
+{
+    FileTransferData* ftData = (FileTransferData*)arg;
+
+    ftp_send(ftData->clientConn->controlFd, ftData->clientConn, "150 STOR OK, send data");
+
+    FILE* file = fopen(ftData->filePath, "w");
+
+    const unsigned int BUF_SIZE = 1024;
+    char buf[BUF_SIZE];
+    memset(buf, 0, BUF_SIZE);
+
+    int readBytes = 0;
+
+    while((readBytes = ftData->clientConn->server->conn.receive(ftData->clientConn->dataFd, buf, BUF_SIZE)) != 0)
+    {
+        fwrite(buf, readBytes, 1, file);
+        printf("bytes: %d, buf: %s\n", readBytes, buf);
+        memset(buf, 0, BUF_SIZE);
+    }
+
+    fclose(file);
+
+    ftp_send(ftData->clientConn->controlFd, ftData->clientConn, "226 STOR OK");
+
+    return 0;
+}
+
+static void handle_stor_command(FtpCommand* command, ClientConn* clientConn)
+{
+    FileTransferData* ftData = (FileTransferData*)malloc(sizeof(FileTransferData));
+    snprintf(ftData->filePath, 256, "%s/%s", clientConn->currDir, command->args);
+    printf("filePath: %s\n", ftData->filePath);
+    ftData->clientConn = clientConn;
+    clientConn->threadStarter->execute_function(&file_stor_func, ftData);
 }
 
 static void* client_conn_main(void* arg)
@@ -493,6 +536,9 @@ static void* client_conn_main(void* arg)
 			break;
         case RETR:
             handle_retr_command(&command, clientConn);
+            break;
+        case STOR:
+            handle_stor_command(&command, clientConn);
             break;
 		default:
 			ftp_send(clientConn->controlFd, clientConn, "500 - Not implemented");

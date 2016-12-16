@@ -25,20 +25,12 @@ static void disconnect(int socketFd)
 
 static int socket_send(int fileDesc, void* data, int size)
 {
-	int noOfBytesSent = 0;
-
-	noOfBytesSent = send(fileDesc, data, size, 0);
-
-	return noOfBytesSent;
+	return send(fileDesc, data, size, 0);
 }
 
 static int socket_receive(int fileDesc, void* data, int max_size)
 {
-	int noOfBytesReceived = 0;
-
-	noOfBytesReceived = recv(fileDesc, data, max_size, 0);
-
-	return noOfBytesReceived;
+    return recv(fileDesc, data, max_size, 0);
 }
 
 //----- Server -----
