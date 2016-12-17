@@ -402,25 +402,35 @@ static void* file_retr_func(void* arg)
     FileTransferData* ftData = (FileTransferData*)arg;
     FILE* file = fopen(ftData->filePath, "r");
 
-    const unsigned int BUF_SIZE = 1024;
+    const int BUF_SIZE = 1024;
     char buf[BUF_SIZE];
     memset(buf, 0, BUF_SIZE);
+
+    int readBytes = 0;
 
     if(file)
     {
         ftp_send(ftData->clientConn->controlFd, ftData->clientConn, "150 RETR OK, data follows");
 
-        while(fgets(buf, BUF_SIZE, file))
+        while((readBytes = fread(buf, 1, BUF_SIZE, file)) > 0)
         {
-            int bytesRead = strlen(buf);
-            if('A'  == ftData->clientConn->transferMode &&
-               '\n' == buf[strlen(buf) - 1])
+            if('A'  == ftData->clientConn->transferMode)
             {
-                buf[bytesRead - 1] = '\r';
-                buf[bytesRead]     = '\n';
-                bytesRead++;
+                int index = 0;
+                for(index = 0; index < readBytes; ++index)
+                {
+                    if('\n' == buf[index]) //Append a \r to each new line
+                    {
+                        char carrRet = '\r';
+                        ftData->clientConn->server->conn.send(ftData->clientConn->dataFd, &carrRet, 1);
+                    }
+                    ftData->clientConn->server->conn.send(ftData->clientConn->dataFd, &buf[index], 1);
+                }
             }
-            ftData->clientConn->server->conn.send(ftData->clientConn->dataFd, buf, bytesRead);
+            else
+            {
+                ftData->clientConn->server->conn.send(ftData->clientConn->dataFd, buf, readBytes);
+            }
         }
 
         fclose(file);
