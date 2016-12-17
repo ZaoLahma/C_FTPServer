@@ -464,7 +464,22 @@ static void* file_stor_func(void* arg)
 
     while((readBytes = ftData->clientConn->server->conn.receive(ftData->clientConn->dataFd, buf, BUF_SIZE)) != 0)
     {
-        fwrite(buf, readBytes, 1, file);
+        if('A' != ftData->clientConn->transferMode)
+        {
+            fwrite(buf, readBytes, 1, file);
+        }
+        else
+        {
+            // Strip away all \r from the file
+            int index = 0;
+            for(index = 0; index < readBytes; index++)
+            {
+                if('\r' != buf[index])
+                {
+                    fwrite(&buf[index], 1, 1, file);
+                }
+            }
+        }
         printf("bytes: %d, buf: %s\n", readBytes, buf);
         memset(buf, 0, BUF_SIZE);
     }
@@ -472,6 +487,8 @@ static void* file_stor_func(void* arg)
     fclose(file);
 
     ftp_send(ftData->clientConn->controlFd, ftData->clientConn, "226 STOR OK");
+
+    free(ftData);
 
     return 0;
 }
