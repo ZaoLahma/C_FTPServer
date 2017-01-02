@@ -57,7 +57,8 @@ typedef enum FTP_COMMAND
 	RETR,
 	STOR,
 	RMD,
-	MKD
+	MKD,
+	DELE
 } FTP_COMMAND;
 
 typedef struct FtpCommand
@@ -164,6 +165,10 @@ static FtpCommand get_command(ClientConn* clientConn)
 		{
             command.command = MKD;
 		}
+		else if(strcmp("DELE", commandStr) == 0)
+		{
+            command.command = DELE;
+        }
 
         printf("command: %s, %s\n", commandStr, command.args);
 	}
@@ -498,8 +503,16 @@ static void handle_cwd_command(FtpCommand* command, ClientConn* clientConn)
 		}
 	}
 
-	printf("clientConn->currDir: %s\n", clientConn->currDir);
-	ftp_send(clientConn->controlFd, clientConn, "250 CWD OK");
+	if(strstr(clientConn->currDir, clientConn->ftpRootDir) != 0)
+	{
+        printf("clientConn->currDir: %s\n", clientConn->currDir);
+        ftp_send(clientConn->controlFd, clientConn, "250 CWD OK");
+	}
+	else
+	{
+        strncpy(clientConn->currDir, clientConn->ftpRootDir, 256);
+        ftp_send(clientConn->controlFd, clientConn, "550 CWD permission denied. Not allwed to CWD out of ftp root dir");
+	}
 }
 
 static void handle_type_command(FtpCommand* command, ClientConn* clientConn)
@@ -655,7 +668,7 @@ static void handle_rmd_command(FtpCommand* command, ClientConn* clientConn)
         char res[1024];
         char cmd[300] = "";
 
-        sprintf(cmd, "rmdir %s", command->args);
+        sprintf(cmd, "rmdir %s/%s", clientConn->currDir, command->args);
 
         exec_proc(clientConn, cmd, res);
 
@@ -674,7 +687,26 @@ static void handle_mkd_command(FtpCommand* command, ClientConn* clientConn)
         char res[1024];
         char cmd[300] = "";
 
-        sprintf(cmd, "mkdir %s", command->args);
+        sprintf(cmd, "mkdir %s/%s", clientConn->currDir, command->args);
+
+        exec_proc(clientConn, cmd, res);
+
+        ftp_send(clientConn->controlFd, clientConn, "250 DELE OK");
+    }
+    else
+    {
+        ftp_send(clientConn->controlFd, clientConn, "550 RMD permission denied due to user rights set to READ");
+    }
+}
+
+static void handle_dele_command(FtpCommand* command, ClientConn* clientConn)
+{
+    if(clientConn->userRights == WRITE)
+    {
+        char res[1024];
+        char cmd[300] = "";
+
+        sprintf(cmd, "rm %s/%s", clientConn->currDir, command->args);
 
         exec_proc(clientConn, cmd, res);
 
@@ -743,6 +775,9 @@ static void* client_conn_main(void* arg)
                 break;
             case MKD:
                 handle_mkd_command(&command, clientConn);
+                break;
+            case DELE:
+                handle_dele_command(&command, clientConn);
                 break;
             default:
                 ftp_send(clientConn->controlFd, clientConn, "500 - Not implemented");
