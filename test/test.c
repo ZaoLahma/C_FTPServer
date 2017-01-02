@@ -123,21 +123,22 @@ void* ftp_test_func(void* arg)
 
 	noOfBytesReceived = client.conn.receive(serverFd, receiveBuf, 100);
 	receiveBuf[noOfBytesReceived] = '\0';
-
 	EXPECT(0, strcmp("220 OK\r\n", receiveBuf));
 
-	client.conn.send(serverFd, "USER janne\r\n", 12);
+	client.conn.send(serverFd, "CWD test\r\n", 10);
+    noOfBytesReceived = client.conn.receive(serverFd, receiveBuf, 100);
+	receiveBuf[noOfBytesReceived] = '\0';
+	EXPECT(0, strcmp("530 - Not logged in\r\n", receiveBuf));
+
+	client.conn.send(serverFd, "USER janne_linux\r\n", 18);
 
 	noOfBytesReceived = client.conn.receive(serverFd, receiveBuf, 100);
 	receiveBuf[noOfBytesReceived] = '\0';
-
 	EXPECT(0, strcmp("330 OK, send password\r\n", receiveBuf));
 
 	client.conn.send(serverFd, "PASS hihello\r\n", 14);
-
 	noOfBytesReceived = client.conn.receive(serverFd, receiveBuf, 100);
 	receiveBuf[noOfBytesReceived] = '\0';
-
 	EXPECT(0, strcmp("230 OK, user logged in\r\n", receiveBuf));
 
 	int clientFd = 0xffffffff;

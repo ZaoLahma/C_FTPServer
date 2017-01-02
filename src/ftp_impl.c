@@ -17,14 +17,22 @@
 #include <fcntl.h>
 #include <pthread.h>
 
+typedef enum UserRights
+{
+    READ,
+    WRITE
+} UserRights;
+
 typedef struct ClientConn
 {
 	int controlFd;
 	int dataFd;
+	int loggedIn;
+	UserRights userRights;
 	char transferMode;
 	char userName[20];
-	char currDir[100];
-	char ftpRootDir[25];
+	char currDir[256];
+	char ftpRootDir[256];
 	unsigned char passivePort[2];
 	unsigned char ipAddr[4];
 	struct socket_server* server;
@@ -163,12 +171,77 @@ static void handle_user_command(FtpCommand* command, ClientConn* clientConn)
 	ftp_send(clientConn->controlFd, clientConn, "330 OK, send password");
 }
 
+static void get_user(FtpCommand* command, ClientConn* clientConn)
+{
+    FILE* fp;
+    const unsigned int BUF_SIZE = 256;
+    char buffer[BUF_SIZE];
+
+    fp = fopen("users.cfg", "r");
+
+    char keyword[32] = "";
+    char arg[256] = "";
+
+    if(fp)
+    {
+        int parsingUser = 0;
+        while(fgets(buffer, BUF_SIZE, (FILE*) fp)) {
+            sscanf(buffer, "%s %s", keyword, arg);
+            switch(parsingUser)
+            {
+                case 1:
+                    if(strncmp("END_USER", keyword, 32) == 0)
+                    {
+                        parsingUser = 0;
+                    }
+                    else if(strncmp("HOME_DIR", keyword, 32) == 0)
+                    {
+                        strncpy(clientConn->ftpRootDir, arg, 256);
+                    }
+                    else if(strncmp("PASSWD", keyword, 32) == 0)
+                    {
+                        if(strncmp(arg, command->args, 256) == 0)
+                        {
+                            clientConn->loggedIn = 1;
+                        }
+                    }
+                    else if(strncmp("USER_RIGHTS", keyword, 32) == 0)
+                    {
+                        if(strncmp("WRITE", arg, 256) == 0)
+                        {
+                            clientConn->userRights = WRITE;
+                        }
+                        else
+                        {
+                            clientConn->userRights = READ;
+                        }
+                    }
+                break;
+                default:
+                    if(strncmp("USER", keyword, 32) == 0)
+                    {
+                        if(strncmp(arg, clientConn->userName, 256) == 0)
+                        {
+                            printf("Found user: %s\n", arg);
+                            parsingUser = 1;
+                        }
+                    }
+                break;
+            }
+
+        }
+    }
+
+    fclose(fp);
+}
+
 static void handle_pass_command(FtpCommand* command, ClientConn* clientConn)
 {
-	if((strcmp("hihello", command->args) == 0) &&
-	   (strcmp("janne", clientConn->userName) == 0))
+    get_user(command, clientConn);
+
+	if(clientConn->loggedIn == 1)
 	{
-		strncpy(clientConn->currDir, clientConn->ftpRootDir, 100);
+		strncpy(clientConn->currDir, clientConn->ftpRootDir, 256);
 		ftp_send(clientConn->controlFd, clientConn, "230 OK, user logged in");
 	}
 	else
@@ -232,7 +305,6 @@ static char* exec_proc(ClientConn* clientConn, char* cmd)
 
 static void handle_list_command(FtpCommand* command, ClientConn* clientConn)
 {
-    printf("Currdir in list: %s\n", clientConn->currDir);
 	if(-1 != clientConn->dataFd)
 	{
 		ftp_send(clientConn->controlFd, clientConn, "150 LIST executed ok, data follows");
@@ -275,8 +347,6 @@ static void handle_port_command(FtpCommand* command, ClientConn* clientConn)
 			address[2],
 			address[3]);
 
-	printf("addrString: %s\n", addrString);
-
 	unsigned int portNo = (ports[0] << 8) + ports[1];
 	printf("portNo: %d\n", portNo);
 
@@ -287,8 +357,6 @@ static void handle_port_command(FtpCommand* command, ClientConn* clientConn)
 	init_client_socket(&client);
 
 	clientConn->dataFd = client.connect(addrString, portString);
-
-	printf("dataFd: %d\n", clientConn->dataFd);
 
 	if(-1 != clientConn->dataFd)
 	{
@@ -384,10 +452,6 @@ static void handle_cwd_command(FtpCommand* command, ClientConn* clientConn)
 
 static void handle_type_command(FtpCommand* command, ClientConn* clientConn)
 {
-	printf("command->args: %s\n", command->args);
-
-	printf("clientConn->transferMode before type command: %c\n", clientConn->transferMode);
-
 	if(strcmp("A", command->args) == 0)
 	{
 		clientConn->transferMode = 'A';
@@ -541,48 +605,69 @@ static void* client_conn_main(void* arg)
 	{
 		command = get_command(clientConn);
 
-		switch(command.command)
-		{
-		case USER:
-			handle_user_command(&command, clientConn);
-			break;
-		case QUIT:
-			handle_quit_command(clientConn);
-			running = 0;
-			break;
-		case PASS:
-			handle_pass_command(&command, clientConn);
-			break;
-		case SYST:
-			handle_syst_command(clientConn);
-			break;
-		case PWD:
-			handle_pwd_command(clientConn);
-			break;
-		case LIST:
-			handle_list_command(&command, clientConn);
-			break;
-		case PORT:
-			handle_port_command(&command, clientConn);
-			break;
-		case PASV:
-			handle_pasv_command(clientConn);
-			break;
-		case CWD:
-			handle_cwd_command(&command, clientConn);
-			break;
-		case TYPE:
-			handle_type_command(&command, clientConn);
-			break;
-        case RETR:
-            handle_retr_command(&command, clientConn);
+        switch(clientConn->loggedIn)
+        {
+        case 1:
+            switch(command.command)
+            {
+            case QUIT:
+                handle_quit_command(clientConn);
+                running = 0;
+                break;
+            case SYST:
+                handle_syst_command(clientConn);
+                break;
+            case PWD:
+                handle_pwd_command(clientConn);
+                break;
+            case LIST:
+                handle_list_command(&command, clientConn);
+                break;
+            case PORT:
+                handle_port_command(&command, clientConn);
+                break;
+            case PASV:
+                handle_pasv_command(clientConn);
+                break;
+            case CWD:
+                handle_cwd_command(&command, clientConn);
+                break;
+            case TYPE:
+                handle_type_command(&command, clientConn);
+                break;
+            case RETR:
+                handle_retr_command(&command, clientConn);
+                break;
+            case STOR:
+                handle_stor_command(&command, clientConn);
+                break;
+            default:
+                ftp_send(clientConn->controlFd, clientConn, "500 - Not implemented");
+                break;
+            }
             break;
-        case STOR:
-            handle_stor_command(&command, clientConn);
+        default:
+            switch(command.command)
+            {
+            case USER:
+                handle_user_command(&command, clientConn);
+                break;
+            case PASS:
+                handle_pass_command(&command, clientConn);
+                break;
+            case SYST:
+                handle_syst_command(clientConn);
+                break;
+            case QUIT:
+                handle_quit_command(clientConn);
+                running = 0;
+                break;
+            default:
+                ftp_send(clientConn->controlFd, clientConn, "530 - Not logged in");
+                break;
+            }
             break;
-		default:
-			ftp_send(clientConn->controlFd, clientConn, "500 - Not implemented");
-		}
+        }
 	}
 
 	clientConn->server->conn.disconnect(clientConn->controlFd);
@@ -617,7 +702,8 @@ void run_ftp(int* running, unsigned char* addr, char* port)
 			memcpy(client->ipAddr, addr, 4);
 			client->passivePort[0] = 10;
 			client->passivePort[1] = 10;
-			strncpy(client->ftpRootDir, "/home/janne", 25);
+			client->loggedIn = 0;
+			client->userRights = READ;
 			client->transferMode = 'A';
 			client->server = &server;
 			client->threadStarter = &thread;
