@@ -8,7 +8,7 @@
 #ifndef INC_FTP_IMPL_H_
 #define INC_FTP_IMPL_H_
 
-void run_ftp(int* running, unsigned char* addr, char* port);
+void run_ftp(int* running, char* port);
 
 
 #endif /* INC_FTP_IMPL_H_ */

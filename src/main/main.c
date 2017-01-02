@@ -12,11 +12,7 @@ int main()
 {
 	int* running = (int*)malloc(sizeof(int));
 	*running = 1;
-	unsigned char addr[4] = {127, 0, 0, 1};
-	//unsigned char addr[4] = {192, 168, 1, 175};
-	run_ftp(running, addr, "3370");
-
+	run_ftp(running, "3370");
 	free(running);
-
 	return 0;
 }

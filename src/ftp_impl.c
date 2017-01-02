@@ -189,46 +189,93 @@ static void get_user(FtpCommand* command, ClientConn* clientConn)
             sscanf(buffer, "%s %s", keyword, arg);
             switch(parsingUser)
             {
-                case 1:
-                    if(strncmp("END_USER", keyword, 32) == 0)
+            case 1:
+                if(strncmp("END_USER", keyword, 32) == 0)
+                {
+                    parsingUser = 0;
+                }
+                else if(strncmp("HOME_DIR", keyword, 32) == 0)
+                {
+                    strncpy(clientConn->ftpRootDir, arg, 256);
+                }
+                else if(strncmp("PASSWD", keyword, 32) == 0)
+                {
+                    if(strncmp(arg, command->args, 256) == 0)
                     {
-                        parsingUser = 0;
+                        clientConn->loggedIn = 1;
                     }
-                    else if(strncmp("HOME_DIR", keyword, 32) == 0)
+                }
+                else if(strncmp("RIGHTS", keyword, 32) == 0)
+                {
+                    if(strncmp("WRITE", arg, 256) == 0)
                     {
-                        strncpy(clientConn->ftpRootDir, arg, 256);
+                        clientConn->userRights = WRITE;
                     }
-                    else if(strncmp("PASSWD", keyword, 32) == 0)
+                    else
                     {
-                        if(strncmp(arg, command->args, 256) == 0)
-                        {
-                            clientConn->loggedIn = 1;
-                        }
+                        clientConn->userRights = READ;
                     }
-                    else if(strncmp("USER_RIGHTS", keyword, 32) == 0)
+                }
+            break;
+            default:
+                if(strncmp("USER", keyword, 32) == 0)
+                {
+                    if(strncmp(arg, clientConn->userName, 256) == 0)
                     {
-                        if(strncmp("WRITE", arg, 256) == 0)
-                        {
-                            clientConn->userRights = WRITE;
-                        }
-                        else
-                        {
-                            clientConn->userRights = READ;
-                        }
+                        printf("Found user: %s\n", arg);
+                        parsingUser = 1;
                     }
-                break;
-                default:
-                    if(strncmp("USER", keyword, 32) == 0)
-                    {
-                        if(strncmp(arg, clientConn->userName, 256) == 0)
-                        {
-                            printf("Found user: %s\n", arg);
-                            parsingUser = 1;
-                        }
-                    }
-                break;
+                }
+            break;
             }
 
+        }
+    }
+
+    fclose(fp);
+}
+
+static void get_config(ClientConn* clientConn)
+{
+    FILE* fp;
+    const unsigned int BUF_SIZE = 256;
+    char buffer[BUF_SIZE];
+
+    fp = fopen("config.cfg", "r");
+
+    char keyword[32] = "";
+    char arg[256] = "";
+
+    if(fp)
+    {
+        int parsingPassive = 0;
+        while(fgets(buffer, BUF_SIZE, (FILE*) fp)) {
+            sscanf(buffer, "%s %s", keyword, arg);
+            switch(parsingPassive)
+            {
+            case 1:
+                if(strncmp("END_PASSIVE", keyword, 32) == 0)
+                {
+                    parsingPassive = 0;
+                }
+                else if(strncmp("ADDR", keyword, 32) == 0)
+                {
+                    sscanf(arg,
+                           "%hhu.%hhu.%hhu.%hhu",
+                           &clientConn->ipAddr[0],
+                           &clientConn->ipAddr[1],
+                           &clientConn->ipAddr[2],
+                           &clientConn->ipAddr[3]);
+                }
+                break;
+
+            default:
+                if(strncmp("PASSIVE", keyword, 32) == 0)
+                {
+                    parsingPassive = 1;
+                }
+                break;
+            }
         }
     }
 
@@ -242,6 +289,7 @@ static void handle_pass_command(FtpCommand* command, ClientConn* clientConn)
 	if(clientConn->loggedIn == 1)
 	{
 		strncpy(clientConn->currDir, clientConn->ftpRootDir, 256);
+		get_config(clientConn);
 		ftp_send(clientConn->controlFd, clientConn, "230 OK, user logged in");
 	}
 	else
@@ -304,7 +352,7 @@ static void handle_list_command(FtpCommand* command, ClientConn* clientConn)
 		ftp_send(clientConn->controlFd, clientConn, "150 LIST executed ok, data follows");
 		char cmd[256] = "";
 		sprintf(cmd, "%s %s/%s %s", "ls -l", clientConn->currDir, command->args, "| tail -n+2");
-		char res[4096];
+		char res[4096] = "";
 		exec_proc(clientConn, cmd, res);
 		ftp_send(clientConn->dataFd, clientConn, res);
 		ftp_send(clientConn->controlFd, clientConn, "226 LIST data send finished");
@@ -561,12 +609,13 @@ static void* file_stor_func(void* arg)
                 }
             }
         }
-        printf("bytes: %d, buf: %s\n", readBytes, buf);
         memset(buf, 0, BUF_SIZE);
     }
 
     fclose(file);
 
+
+    ftData->clientConn->server->conn.disconnect(ftData->clientConn->dataFd);
     ftp_send(ftData->clientConn->controlFd, ftData->clientConn, "226 STOR OK");
 
     free(ftData);
@@ -576,11 +625,18 @@ static void* file_stor_func(void* arg)
 
 static void handle_stor_command(FtpCommand* command, ClientConn* clientConn)
 {
-    FileTransferData* ftData = (FileTransferData*)malloc(sizeof(FileTransferData));
-    snprintf(ftData->filePath, 256, "%s/%s", clientConn->currDir, command->args);
-    printf("filePath: %s\n", ftData->filePath);
-    ftData->clientConn = clientConn;
-    clientConn->threadStarter->execute_function(&file_stor_func, ftData);
+    if(clientConn->userRights == WRITE)
+    {
+        FileTransferData* ftData = (FileTransferData*)malloc(sizeof(FileTransferData));
+        snprintf(ftData->filePath, 256, "%s/%s", clientConn->currDir, command->args);
+        ftData->clientConn = clientConn;
+        clientConn->threadStarter->execute_function(&file_stor_func, ftData);
+    }
+    else
+    {
+        ftp_send(clientConn->controlFd, clientConn, "553 STOR permission denied due to user rights set to READ");
+        clientConn->server->conn.disconnect(clientConn->dataFd);
+    }
 }
 
 static void* client_conn_main(void* arg)
@@ -673,7 +729,7 @@ static void* client_conn_main(void* arg)
 	return 0;
 }
 
-void run_ftp(int* running, unsigned char* addr, char* port)
+void run_ftp(int* running, char* port)
 {
 	printf("FTP server starting, running: %d\n", *running);
 	struct socket_server server;
@@ -693,7 +749,6 @@ void run_ftp(int* running, unsigned char* addr, char* port)
 		{
 			ClientConn* client = (ClientConn*)malloc(sizeof(struct ClientConn));
 			client->controlFd = clientSocketFd;
-			memcpy(client->ipAddr, addr, 4);
 			client->passivePort[0] = 10;
 			client->passivePort[1] = 10;
 			client->loggedIn = 0;
