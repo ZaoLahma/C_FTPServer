@@ -691,11 +691,11 @@ static void handle_mkd_command(FtpCommand* command, ClientConn* clientConn)
 
         exec_proc(clientConn, cmd, res);
 
-        ftp_send(clientConn->controlFd, clientConn, "250 DELE OK");
+        ftp_send(clientConn->controlFd, clientConn, "250 MKD OK");
     }
     else
     {
-        ftp_send(clientConn->controlFd, clientConn, "550 RMD permission denied due to user rights set to READ");
+        ftp_send(clientConn->controlFd, clientConn, "550 MKD permission denied due to user rights set to READ");
     }
 }
 
@@ -710,11 +710,11 @@ static void handle_dele_command(FtpCommand* command, ClientConn* clientConn)
 
         exec_proc(clientConn, cmd, res);
 
-        ftp_send(clientConn->controlFd, clientConn, "250 MKD OK");
+        ftp_send(clientConn->controlFd, clientConn, "250 DELE OK");
     }
     else
     {
-        ftp_send(clientConn->controlFd, clientConn, "550 RMD permission denied due to user rights set to READ");
+        ftp_send(clientConn->controlFd, clientConn, "550 DELE permission denied due to user rights set to READ");
     }
 }
 
