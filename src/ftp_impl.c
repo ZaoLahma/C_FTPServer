@@ -194,29 +194,40 @@ static void handle_pwd_command(ClientConn* clientConn)
 	ftp_send(clientConn->controlFd, clientConn, sendBuf);
 }
 
-static void exec_proc(ClientConn* clientConn, char* cmd)
+static char* exec_proc(ClientConn* clientConn, char* cmd)
 {
-	char buffer[4096] = "";
+    printf("Running command: %s\n", cmd);
+    const unsigned int BUF_SIZE = 4096;
+    const unsigned int F_BUF_SIZE = 1024;
+
+	char* buffer = (char*)malloc(BUF_SIZE);
+	memset(buffer, 0, BUF_SIZE);
 
 	FILE* file = popen(cmd, "r");
+	char fBuffer[F_BUF_SIZE];
+	memset(fBuffer, 0, F_BUF_SIZE);
+	unsigned int buffOffset = 0;
 
 	while (!feof(file))
 	{
-		if (fgets(buffer, 4096, file) != 0)
+		if (fgets(fBuffer, F_BUF_SIZE, file) != 0)
 		{
-			int lineLength = strlen(buffer);
-			printf("exec_proc transferMode: %c\n", clientConn->transferMode);
+			int lineLength = strlen(fBuffer);
 			if(clientConn->transferMode == 'A')
 			{
-				buffer[lineLength - 1] = '\r';
-				buffer[lineLength]     = '\n';
+				fBuffer[lineLength - 1] = '\r';
+				fBuffer[lineLength]     = '\n';
+				lineLength += 1;
 			}
-			ftp_send(clientConn->dataFd, clientConn, buffer);
-			memset(buffer, 0, 4096);
+			memcpy(&buffer[buffOffset], fBuffer, lineLength);
+			buffOffset += lineLength;
+			memset(fBuffer, 0, F_BUF_SIZE);
 		}
 	}
 
 	pclose(file);
+
+	return buffer;
 }
 
 static void handle_list_command(FtpCommand* command, ClientConn* clientConn)
@@ -226,8 +237,10 @@ static void handle_list_command(FtpCommand* command, ClientConn* clientConn)
 	{
 		ftp_send(clientConn->controlFd, clientConn, "150 LIST executed ok, data follows");
 		char cmd[256] = "";
-		sprintf(cmd, "%s %s %s", "ls -l", clientConn->currDir, "| tail -n+2");
-		exec_proc(clientConn, cmd);
+		sprintf(cmd, "%s %s/%s %s", "ls -l", clientConn->currDir, command->args, "| tail -n+2");
+		char* res = exec_proc(clientConn, cmd);
+		ftp_send(clientConn->dataFd, clientConn, res);
+		free(res);
 		ftp_send(clientConn->controlFd, clientConn, "226 LIST data send finished");
 		clientConn->server->conn.disconnect(clientConn->dataFd);
 		clientConn->dataFd = -1;
