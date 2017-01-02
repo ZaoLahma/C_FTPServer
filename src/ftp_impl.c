@@ -55,7 +55,9 @@ typedef enum FTP_COMMAND
 	CWD,
 	TYPE,
 	RETR,
-	STOR
+	STOR,
+	RMD,
+	MKD
 } FTP_COMMAND;
 
 typedef struct FtpCommand
@@ -153,6 +155,14 @@ static FtpCommand get_command(ClientConn* clientConn)
 		else if(strcmp("STOR", commandStr) == 0)
 		{
             command.command = STOR;
+		}
+		else if(strcmp("RMD", commandStr) == 0)
+		{
+            command.command = RMD;
+		}
+		else if(strcmp("MKD", commandStr) == 0)
+		{
+            command.command = MKD;
 		}
 
         printf("command: %s, %s\n", commandStr, command.args);
@@ -572,7 +582,6 @@ static void handle_retr_command(FtpCommand* command, ClientConn* clientConn)
 {
     FileTransferData* ftData = (FileTransferData*)malloc(sizeof(FileTransferData));
     snprintf(ftData->filePath, 256, "%s/%s", clientConn->currDir, command->args);
-    printf("filePath: %s\n", ftData->filePath);
     ftData->clientConn = clientConn;
     clientConn->threadStarter->execute_function(&file_retr_func, ftData);
 }
@@ -639,6 +648,44 @@ static void handle_stor_command(FtpCommand* command, ClientConn* clientConn)
     }
 }
 
+static void handle_rmd_command(FtpCommand* command, ClientConn* clientConn)
+{
+    if(clientConn->userRights == WRITE)
+    {
+        char res[1024];
+        char cmd[300] = "";
+
+        sprintf(cmd, "rmdir %s", command->args);
+
+        exec_proc(clientConn, cmd, res);
+
+        ftp_send(clientConn->controlFd, clientConn, "250 RMD OK");
+    }
+    else
+    {
+        ftp_send(clientConn->controlFd, clientConn, "550 RMD permission denied due to user rights set to READ");
+    }
+}
+
+static void handle_mkd_command(FtpCommand* command, ClientConn* clientConn)
+{
+    if(clientConn->userRights == WRITE)
+    {
+        char res[1024];
+        char cmd[300] = "";
+
+        sprintf(cmd, "mkdir %s", command->args);
+
+        exec_proc(clientConn, cmd, res);
+
+        ftp_send(clientConn->controlFd, clientConn, "250 MKD OK");
+    }
+    else
+    {
+        ftp_send(clientConn->controlFd, clientConn, "550 RMD permission denied due to user rights set to READ");
+    }
+}
+
 static void* client_conn_main(void* arg)
 {
 	ClientConn* clientConn = (ClientConn*)arg;
@@ -690,6 +737,12 @@ static void* client_conn_main(void* arg)
                 break;
             case STOR:
                 handle_stor_command(&command, clientConn);
+                break;
+            case RMD:
+                handle_rmd_command(&command, clientConn);
+                break;
+            case MKD:
+                handle_mkd_command(&command, clientConn);
                 break;
             default:
                 ftp_send(clientConn->controlFd, clientConn, "500 - Not implemented");

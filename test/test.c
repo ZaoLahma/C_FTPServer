@@ -185,17 +185,26 @@ void* ftp_test_func(void* arg)
 	printf("EXPECTING TIMEOUT IN 2.5 SECONDS\n");
 
 	//------
-	client.conn.send(serverFd, "CWD test\r\n", 10);
-
+	client.conn.send(serverFd, "MKD temp\r\n", 10);
 	noOfBytesReceived = client.conn.receive(serverFd, receiveBuf, 100);
 	receiveBuf[noOfBytesReceived] = '\0';
+	EXPECT(0, strcmp("250 MKD OK\r\n", receiveBuf));
+
+	client.conn.send(serverFd, "CWD temp\r\n", 10);
+	noOfBytesReceived = client.conn.receive(serverFd, receiveBuf, 100);
+	receiveBuf[noOfBytesReceived] = '\0';
+	printf("receiveBuf: %s", receiveBuf);
 	EXPECT(0, strcmp("250 CWD OK\r\n", receiveBuf));
 
 	client.conn.send(serverFd, "CWD ..\r\n", 10);
-
 	noOfBytesReceived = client.conn.receive(serverFd, receiveBuf, 100);
 	receiveBuf[noOfBytesReceived] = '\0';
 	EXPECT(0, strcmp("250 CWD OK\r\n", receiveBuf));
+
+	client.conn.send(serverFd, "RMD temp\r\n", 10);
+	noOfBytesReceived = client.conn.receive(serverFd, receiveBuf, 100);
+	receiveBuf[noOfBytesReceived] = '\0';
+	EXPECT(0, strcmp("250 RMD OK\r\n", receiveBuf));
 
 	//------
 	client.conn.send(serverFd, "QUIT\r\n", 6);
