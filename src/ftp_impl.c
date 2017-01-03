@@ -16,12 +16,19 @@
 #include <dirent.h>
 #include <fcntl.h>
 #include <pthread.h>
+#include <stdint.h>
 
 typedef enum UserRights
 {
     READ,
     WRITE
 } UserRights;
+
+typedef struct PassivePort
+{
+    uint16_t portNo;
+    uint8_t available;
+} PassivePort;
 
 typedef struct ClientConn
 {
@@ -33,10 +40,12 @@ typedef struct ClientConn
 	char userName[20];
 	char currDir[256];
 	char ftpRootDir[256];
-	unsigned char passivePort[2];
 	unsigned char ipAddr[4];
+	uint16_t numPassivePorts;
+	PassivePort* passivePorts;
 	struct socket_server* server;
 	ThreadStarter* threadStarter;
+	pthread_mutex_t* passivePortMutex;
 } ClientConn;
 
 #define REC_BUF_SIZE 1024
@@ -282,6 +291,25 @@ static void get_config(ClientConn* clientConn)
                            &clientConn->ipAddr[2],
                            &clientConn->ipAddr[3]);
                 }
+                else if(strncmp("PORT_RANGE", keyword, 32) == 0)
+                {
+                    unsigned int low;
+                    unsigned int high;
+                    sscanf(arg, "%u-%u", &low, &high);
+                    clientConn->numPassivePorts = high - low;
+                    if(clientConn->numPassivePorts == 0)
+                    {
+                        clientConn->numPassivePorts += 1;
+                    }
+                    clientConn->passivePorts = (PassivePort*)malloc(sizeof(PassivePort) * (clientConn->numPassivePorts));
+
+                    unsigned int i = 0;
+                    for(i = 0; i < clientConn->numPassivePorts; ++i)
+                    {
+                        clientConn->passivePorts[i].portNo = low + i;
+                        clientConn->passivePorts[i].available = 1;
+                    }
+                }
                 break;
 
             default:
@@ -430,29 +458,61 @@ static void handle_quit_command(ClientConn* clientConn)
 	ftp_send(clientConn->controlFd, clientConn, "221 Bye Bye");
 }
 
+static PassivePort* get_free_passive_port(ClientConn* clientConn)
+{
+    PassivePort* retVal = 0;
+
+    pthread_mutex_lock(clientConn->passivePortMutex);
+    unsigned int i = 0;
+    for(i = 0; i < clientConn->numPassivePorts; ++i)
+    {
+        if(clientConn->passivePorts[i].available == 1)
+        {
+            clientConn->passivePorts[i].available = 0;
+            retVal = &clientConn->passivePorts[i];
+            break;
+        }
+    }
+    pthread_mutex_unlock(clientConn->passivePortMutex);
+    return retVal;
+}
+
+static void return_passive_port(PassivePort* port, ClientConn* clientConn)
+{
+
+    pthread_mutex_lock(clientConn->passivePortMutex);
+    port->available = 1;
+    pthread_mutex_unlock(clientConn->passivePortMutex);
+}
+
 static void handle_pasv_command(ClientConn* clientConn)
 {
-	int portNo = (clientConn->passivePort[0] << 8) + clientConn->passivePort[1];
+	unsigned char passivePortHigh;
+	unsigned char passivePortLow;
+    PassivePort* passivePortPtr = get_free_passive_port(clientConn);
+    passivePortLow  = passivePortPtr->portNo & 0x00ff;
+    passivePortHigh = passivePortPtr->portNo >> 8;
 
 	char portNoStr[6] = "";
-	sprintf(portNoStr, "%d", portNo);
+	sprintf(portNoStr, "%d", passivePortPtr->portNo);
 
 	int serverFd = clientConn->server->get_server_socket_fd(portNoStr);
 
 	char sendBuf[100] = "";
 	memset(sendBuf, 0, 100);
 	sprintf(sendBuf,
-			"227 PASV (addr:%d,%d,%d,%d,%d,%d)",
+			"227 PASV (addr:%u,%u,%u,%u,%u,%u)",
 			clientConn->ipAddr[0],
 			clientConn->ipAddr[1],
 			clientConn->ipAddr[2],
 			clientConn->ipAddr[3],
-			clientConn->passivePort[0],
-			clientConn->passivePort[1]);
+			passivePortHigh,
+			passivePortLow);
 
 	ftp_send(clientConn->controlFd, clientConn, sendBuf);
 	clientConn->dataFd = clientConn->server->wait_for_connection(serverFd);
 	clientConn->server->conn.disconnect(serverFd);
+	return_passive_port(passivePortPtr, clientConn);
 }
 
 static void handle_cwd_command(FtpCommand* command, ClientConn* clientConn)
@@ -829,6 +889,9 @@ void run_ftp(int* running, char* port)
 	ThreadStarter thread;
 	init_thread_starter(&thread, POOL);
 
+	pthread_mutex_t passiveMutex;
+	pthread_mutex_init(&passiveMutex, 0);
+
 	while(*running)
 	{
 		clientSocketFd = server.wait_for_connection(serverSocketFd);
@@ -837,13 +900,13 @@ void run_ftp(int* running, char* port)
 		{
 			ClientConn* client = (ClientConn*)malloc(sizeof(struct ClientConn));
 			client->controlFd = clientSocketFd;
-			client->passivePort[0] = 10;
-			client->passivePort[1] = 10;
 			client->loggedIn = 0;
 			client->userRights = READ;
 			client->transferMode = 'A';
 			client->server = &server;
 			client->threadStarter = &thread;
+			client->passivePorts = 0;
+			client->passivePortMutex = &passiveMutex;
 
 			thread.execute_function(&client_conn_main, client);
 		}

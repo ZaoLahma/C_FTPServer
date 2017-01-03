@@ -169,9 +169,9 @@ void* ftp_test_func(void* arg)
 
 	noOfBytesReceived = client.conn.receive(serverFd, receiveBuf, 100);
 	receiveBuf[noOfBytesReceived] = '\0';
-	EXPECT(0, strcmp("227 PASV (addr:127,0,0,1,10,10)\r\n", receiveBuf));
+	EXPECT(0, strcmp("227 PASV (addr:127,0,0,1,12,228)\r\n", receiveBuf));
 
-	clientFd = client.connect("127.0.0.1", "2570");
+	clientFd = client.connect("127.0.0.1", "3300");
 
 	EXPECT(0, run_list_command(&serverFd, &clientFd, &client));
 
@@ -180,7 +180,7 @@ void* ftp_test_func(void* arg)
 
 	noOfBytesReceived = client.conn.receive(serverFd, receiveBuf, 100);
 	receiveBuf[noOfBytesReceived] = '\0';
-	EXPECT(0, strcmp("227 PASV (addr:127,0,0,1,10,10)\r\n", receiveBuf));
+	EXPECT(0, strcmp("227 PASV (addr:127,0,0,1,12,228)\r\n", receiveBuf));
 
 	printf("EXPECTING TIMEOUT IN 2.5 SECONDS\n");
 
