@@ -12,12 +12,12 @@
 
 typedef enum THREAD_STARTER_TYPE
 {
-	POOL,
-	DETACHED
+    POOL,
+    DETACHED
 } THREAD_STARTER_TYPE;
 
 //Function implementation
 void init_thread_starter(struct ThreadStarter* threadStarter,
-		                 unsigned int type);
+                         unsigned int type);
 
 #endif /* INC_THREAD_STARTER_IMPL_H_ */

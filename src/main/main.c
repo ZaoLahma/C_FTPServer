@@ -10,9 +10,9 @@
 
 int main()
 {
-	int* running = (int*)malloc(sizeof(int));
-	*running = 1;
-	run_ftp(running, "3370");
-	free(running);
-	return 0;
+    int* running = (int*)malloc(sizeof(int));
+    *running = 1;
+    run_ftp(running, "3370");
+    free(running);
+    return 0;
 }
