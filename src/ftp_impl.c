@@ -872,6 +872,7 @@ static void* client_conn_main(void* arg)
 
 	printf("Disconnected client with fd: %d\n", clientConn->controlFd);
 
+    free(clientConn->passivePorts);
 	free(clientConn);
 
 	return 0;

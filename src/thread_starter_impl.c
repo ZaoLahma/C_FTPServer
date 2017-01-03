@@ -21,8 +21,8 @@ static int initialized = 0;
 static void execute_job_detached_thread_impl(void* (*thread_func)(void*), void* arg)
 {
 	pthread_t thread;
-	int threadStatus = pthread_create(&thread, 0, thread_func, arg);
-	threadStatus = pthread_detach(thread);
+	pthread_create(&thread, 0, thread_func, arg);
+	pthread_detach(thread);
 }
 
 //Thread pool impl

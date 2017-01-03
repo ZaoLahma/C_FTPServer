@@ -16,6 +16,7 @@ release: $(OBJECTS) $(RELEASE_OBJECTS)
 
 test: $(OBJECTS) $(TEST_OBJECTS)
 	$(CCOMMAND) $(OBJECTS) $(TEST_OBJECTS) $(LINKARGS) -o $(EXE_NAME_TEST)
+	./$(EXE_NAME_TEST)
 
 %.o: %.cpp
 	$(CCOMMAND) $(INC_DIRS) -c $(CFLAGS) $< -o $@
