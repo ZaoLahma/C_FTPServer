@@ -491,7 +491,11 @@ static void handle_pasv_command(ClientConn* clientConn)
 {
     unsigned char passivePortHigh;
     unsigned char passivePortLow;
-    PassivePort* passivePortPtr = get_free_passive_port(clientConn);
+    PassivePort* passivePortPtr = 0;
+    while((passivePortPtr = get_free_passive_port(clientConn)) == 0) //Ugly spin lock for getting a free port
+    {
+        usleep(500);
+    }
     passivePortLow  = passivePortPtr->portNo & 0x00ff;
     passivePortHigh = passivePortPtr->portNo >> 8;
 
