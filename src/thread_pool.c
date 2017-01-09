@@ -91,7 +91,10 @@ static void* pool_thread_func(void* arg)
 
         pthread_mutex_lock(&thread->execMutex);
         thread->busy = 0;
-        pthread_cond_wait(&thread->execCondition, &thread->execMutex);
+        if(thread->active)
+        {
+            pthread_cond_wait(&thread->execCondition, &thread->execMutex);
+        }
         pthread_mutex_unlock(&thread->execMutex);
     }
 
