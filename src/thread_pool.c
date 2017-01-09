@@ -89,9 +89,15 @@ static void* pool_thread_func(void* arg)
             free(item);
         }
 
+        //Mark thread as available for jobs
         pthread_mutex_lock(&thread->execMutex);
         thread->busy = 0;
-        if(thread->active)
+        pthread_mutex_unlock(&thread->execMutex);
+
+        //Wait for next available job, if
+        //thread has not already been notified
+        pthread_mutex_lock(&thread->execMutex);
+        if(thread->active && thread->busy == 0)
         {
             pthread_cond_wait(&thread->execCondition, &thread->execMutex);
         }
