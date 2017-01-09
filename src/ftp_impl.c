@@ -528,19 +528,24 @@ static void handle_cwd_command(FtpCommand* command, ClientConn* clientConn)
     if(strstr(command->args, "..") != 0)
     {
         char* token;
-        char* argStr = (char*)malloc(strlen(clientConn->currDir));
+        int currDirLength = strlen(clientConn->currDir);
+        char* argStr = (char*)malloc(currDirLength + 1);
+        char* toFree = argStr;
         strncpy(argStr, clientConn->currDir, strlen(clientConn->currDir));
+        argStr[currDirLength] = '\0';
         int noOfLevels = 0;
         while((token = strsep(&argStr, "/")) != 0)
         {
             noOfLevels++;
             printf("token: %s\n", token);
         }
-        free(argStr);
-        argStr = (char*)malloc(strlen(clientConn->currDir));
+        free(toFree);
+        argStr = (char*)malloc(currDirLength + 1);
+        toFree = argStr;
 
         printf("clientConn->currDir: %s\n", clientConn->currDir);
         strncpy(argStr, clientConn->currDir, strlen(clientConn->currDir));
+        argStr[currDirLength] = '\0';
         memset(clientConn->currDir, 0, 100);
         int i = 0;
         for(i = 0; i < noOfLevels; ++i)
@@ -553,7 +558,7 @@ static void handle_cwd_command(FtpCommand* command, ClientConn* clientConn)
             }
         }
 
-        free(argStr);
+        free(toFree);
     }
     else
     {
@@ -917,6 +922,8 @@ void run_ftp(int* running, char* port)
             sched_job(context, &client_conn_main, client);
         }
     }
+
+    printf("FTP server stopping\n");
 
     server.conn.disconnect(serverSocketFd);
 
