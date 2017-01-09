@@ -10,8 +10,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <pthread.h>
-#include "../inc/thread_starter.h"
-#include "../inc/thread_starter_impl.h"
+#include "../inc/thread_pool.h"
 #include "../inc/socket_wrapper_impl.h"
 #include "../inc/ftp_impl.h"
 
@@ -222,38 +221,9 @@ void* ftp_test_func(void* arg)
 
 void test_framework()
 {
-    printf("----- DETACHED TEST----- \n");
-
-    struct ThreadStarter threadStarter;
-    init_thread_starter(&threadStarter, DETACHED);
-
-    unsigned int* testInt = (unsigned int*)malloc(sizeof(unsigned int));
-    *testInt = 1;
-
-    unsigned int* testInt_2 = (unsigned int*)malloc(sizeof(unsigned int));
-    *testInt_2 = 2;
-    threadStarter.execute_function(&thread_func_1, testInt);
-    threadStarter.execute_function(&thread_func_2, testInt_2);
-
-    sleep(1);
-
-    printf("----- POOL TEST----- \n");
-
-    init_thread_starter(&threadStarter, POOL);
-
-    threadStarter.execute_function(&thread_func_1, testInt);
-    threadStarter.execute_function(&thread_func_2, testInt_2);
-    threadStarter.execute_function(&thread_func_2, testInt_2);
-    threadStarter.execute_function(&thread_func_1, testInt);
-    threadStarter.execute_function(&thread_func_2, testInt_2);
-    threadStarter.execute_function(&thread_func_1, testInt);
-    threadStarter.execute_function(&thread_func_1, testInt);
-
-    sleep(1);
-
-    free(testInt);
-
     printf("----- SOCKET TEST----- \n");
+
+    struct ThreadContext* context = init_thread_pool(0);
 
     struct socket_client client;
     init_client_socket(&client);
@@ -265,7 +235,7 @@ void test_framework()
 
     printf("socketFd: %d\n", socketFd);
 
-    threadStarter.execute_function(&connect_func, 0);
+    sched_job(context, &connect_func, 0);
 
     int clientFd = server.wait_for_connection(socketFd);
 
@@ -280,21 +250,26 @@ void test_framework()
 
     server.conn.disconnect(clientFd);
     server.conn.disconnect(socketFd);
+
+    destroy_thread_pool(context);
 }
 
 void test_ftp()
 {
-    struct ThreadStarter threadStarter;
-    init_thread_starter(&threadStarter, DETACHED);
+    printf("----- FTP TEST----- \n");
+
+    struct ThreadContext* context = init_thread_pool(0);
 
     int* running = (int*)malloc(sizeof(int));
     *running = 1;
 
-    threadStarter.execute_function(&ftp_test_func, running);
+    sched_job(context, &ftp_test_func, running);
 
     run_ftp(running, "3370");
 
     free(running);
+
+    destroy_thread_pool(context);
 }
 
 int main(void)

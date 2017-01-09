@@ -7,7 +7,7 @@
 
 #include "../inc/ftp_impl.h"
 #include "../inc/socket_wrapper_impl.h"
-#include "../inc/thread_starter_impl.h"
+#include "../inc/thread_pool.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -44,7 +44,7 @@ typedef struct ClientConn
     uint16_t numPassivePorts;
     PassivePort* passivePorts;
     struct socket_server* server;
-    ThreadStarter* threadStarter;
+    struct ThreadContext* threadContext;
     pthread_mutex_t* passivePortMutex;
 } ClientConn;
 
@@ -662,7 +662,7 @@ static void handle_retr_command(FtpCommand* command, ClientConn* clientConn)
     FileTransferData* ftData = (FileTransferData*)malloc(sizeof(FileTransferData));
     snprintf(ftData->filePath, 256, "%s/%s", clientConn->currDir, command->args);
     ftData->clientConn = clientConn;
-    clientConn->threadStarter->execute_function(&file_retr_func, ftData);
+    sched_job(clientConn->threadContext, &file_retr_func, ftData);
 }
 
 static void* file_stor_func(void* arg)
@@ -718,7 +718,7 @@ static void handle_stor_command(FtpCommand* command, ClientConn* clientConn)
         FileTransferData* ftData = (FileTransferData*)malloc(sizeof(FileTransferData));
         snprintf(ftData->filePath, 256, "%s/%s", clientConn->currDir, command->args);
         ftData->clientConn = clientConn;
-        clientConn->threadStarter->execute_function(&file_stor_func, ftData);
+        sched_job(clientConn->threadContext, &file_stor_func, ftData);
     }
     else
     {
@@ -893,8 +893,7 @@ void run_ftp(int* running, char* port)
     int serverSocketFd = server.get_server_socket_fd(port);
     int clientSocketFd = -1;
 
-    ThreadStarter thread;
-    init_thread_starter(&thread, POOL);
+    struct ThreadContext* context = init_thread_pool(0);
 
     pthread_mutex_t passiveMutex;
     pthread_mutex_init(&passiveMutex, 0);
@@ -911,13 +910,15 @@ void run_ftp(int* running, char* port)
             client->userRights = READ;
             client->transferMode = 'A';
             client->server = &server;
-            client->threadStarter = &thread;
+            client->threadContext = context;
             client->passivePorts = 0;
             client->passivePortMutex = &passiveMutex;
 
-            thread.execute_function(&client_conn_main, client);
+            sched_job(context, &client_conn_main, client);
         }
     }
 
     server.conn.disconnect(serverSocketFd);
+
+    destroy_thread_pool(context);
 }
