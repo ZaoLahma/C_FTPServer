@@ -35,8 +35,7 @@
 		<Unit filename="inc/ftp_impl.h" />
 		<Unit filename="inc/socket_wrapper.h" />
 		<Unit filename="inc/socket_wrapper_impl.h" />
-		<Unit filename="inc/thread_starter.h" />
-		<Unit filename="inc/thread_starter_impl.h" />
+		<Unit filename="inc/thread_pool.h" />
 		<Unit filename="src/ftp_impl.c">
 			<Option compilerVar="CC" />
 		</Unit>
@@ -46,7 +45,7 @@
 		<Unit filename="src/socket_wrapper_impl.c">
 			<Option compilerVar="CC" />
 		</Unit>
-		<Unit filename="src/thread_starter_impl.c">
+		<Unit filename="src/thread_pool.c">
 			<Option compilerVar="CC" />
 		</Unit>
 		<Unit filename="test/test.c">
